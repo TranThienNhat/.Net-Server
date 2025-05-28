@@ -1,12 +1,12 @@
 ﻿namespace API.Migrations
 {
+    using Microsoft.AspNet.Identity;
+    using SHOPAPI.Models;
+    using SHOPAPI.Models.Enum;
     using System;
     using System.Data.Entity;
     using System.Data.Entity.Migrations;
     using System.Linq;
-    using Microsoft.AspNet.Identity;
-    using SHOPAPI.Models.Enum;
-    using SHOPAPI.Models;
 
     internal sealed class Configuration : DbMigrationsConfiguration<SHOPAPI.Data.AppDbContext>
     {

@@ -205,9 +205,9 @@
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
-    <Compile Include="Migrations\202505281243553_AddNewEntity.cs" />
-    <Compile Include="Migrations\202505281243553_AddNewEntity.Designer.cs">
-      <DependentUpon>202505281243553_AddNewEntity.cs</DependentUpon>
+    <Compile Include="Migrations\202505281340002_InitialCreate.cs" />
+    <Compile Include="Migrations\202505281340002_InitialCreate.Designer.cs">
+      <DependentUpon>202505281340002_InitialCreate.cs</DependentUpon>
     </Compile>
     <Compile Include="Migrations\Configuration.cs" />
     <Compile Include="Models\Admin.cs" />
@@ -235,8 +235,8 @@
     <Folder Include="Uploads\" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Migrations\202505281243553_AddNewEntity.resx">
-      <DependentUpon>202505281243553_AddNewEntity.cs</DependentUpon>
+    <EmbeddedResource Include="Migrations\202505281340002_InitialCreate.resx">
+      <DependentUpon>202505281340002_InitialCreate.cs</DependentUpon>
     </EmbeddedResource>
   </ItemGroup>
   <PropertyGroup>
