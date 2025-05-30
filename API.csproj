@@ -198,6 +198,7 @@
     <Compile Include="DTOs\Order\OrderItemDto.cs" />
     <Compile Include="DTOs\Order\OrderItemReadDto.cs" />
     <Compile Include="DTOs\Order\OrderReadDto.cs" />
+    <Compile Include="DTOs\Order\UpdateOrderInfoDto.cs" />
     <Compile Include="DTOs\Order\UpdateOrderStatusDto.cs" />
     <Compile Include="DTOs\Product\ProductReadDto.cs" />
     <Compile Include="DTOs\Product\ProductUpdateModel.cs" />

@@ -11,8 +11,17 @@ namespace SHOPAPI.Data
     {
         public AppDbContext() : base("name=DefaultConnection") 
         {
+            // Tối ưu performance configurations
             this.Configuration.LazyLoadingEnabled = false;
             this.Configuration.ProxyCreationEnabled = false;
+            this.Configuration.AutoDetectChangesEnabled = false; // Tắt auto detect changes
+            this.Configuration.ValidateOnSaveEnabled = false;    // Tắt validation khi save
+
+            // Tối ưu connection và timeout
+            this.Database.CommandTimeout = 30; // 30 seconds timeout
+
+            // Sử dụng compiled queries để cache execution plans
+            this.Database.Initialize(force: false);
         }
 
         public DbSet<Product> Products { get; set; }
