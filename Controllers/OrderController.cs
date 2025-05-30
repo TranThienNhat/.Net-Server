@@ -18,14 +18,11 @@ namespace SHOPAPI.Controllers
     public class OrderController : ApiController
     {
         private readonly AppDbContext db = new AppDbContext();
-        private readonly IEmailService _emailService;
+        private readonly IEmailService emailService;
 
         public OrderController()
         {
-            _emailService = new EmailService();
-            // Tối ưu EF tracking
-            db.Configuration.AutoDetectChangesEnabled = false;
-            db.Configuration.ValidateOnSaveEnabled = false;
+            emailService = new EmailService();
         }
 
         [Authorize(Roles = "ADMIN")]
@@ -33,7 +30,6 @@ namespace SHOPAPI.Controllers
         [Route("api/orders")]
         public IHttpActionResult GetOrder()
         {
-            // Sử dụng AsNoTracking để tăng performance cho read-only operations
             var orders = db.Orders
                 .AsNoTracking()
                 .Include(o => o.OrderItems.Select(oi => oi.Product))
@@ -57,6 +53,41 @@ namespace SHOPAPI.Controllers
                     }).ToList()
                 }).ToList();
             return Ok(orders);
+        }
+
+        [HttpGet]
+        [Route("api/orders/{id}")]
+        public async Task<IHttpActionResult> GetOrderById(int id)
+        {
+            var order = await db.Orders
+                .AsNoTracking()
+                .Include(o => o.OrderItems.Select(oi => oi.Product))
+                .Where(o => o.Id == id)
+                .Select(o => new OrderReadDto
+                {
+                    Id = o.Id,
+                    Name = o.Name,
+                    PhoneNumber = o.PhoneNumber,
+                    Email = o.Email,
+                    Address = o.Address,
+                    Note = o.Note,
+                    OrderDate = o.OrderDate,
+                    TotalPrice = o.TotalPrice,
+                    OrderStatus = o.orderStatus.ToString(),
+                    OrderItems = o.OrderItems.Select(oi => new OrderItemReadDto
+                    {
+                        ProductId = oi.ProductId,
+                        ProductName = oi.Product.Name,
+                        Quantity = oi.Quantity,
+                        PriceAtPurchase = oi.PriceAtPurchase,
+                    }).ToList()
+                })
+                .FirstOrDefaultAsync();
+
+            if (order == null)
+                return NotFound();
+
+            return Ok(order);
         }
 
         [HttpPost]
@@ -104,9 +135,8 @@ namespace SHOPAPI.Controllers
                         OrderItems = new List<OrderItem>()
                     };
 
-                    // Bulk processing các items
                     var orderItems = new List<OrderItem>();
-                    decimal totalPrice = 0;
+                    long totalPrice = 0;
 
                     foreach (var itemDto in dto.Items)
                     {
@@ -131,38 +161,30 @@ namespace SHOPAPI.Controllers
                     }
 
                     order.OrderItems = orderItems;
-                    order.TotalPrice = ((long)totalPrice);
+                    order.TotalPrice = totalPrice;
 
                     db.Orders.Add(order);
 
-                    // Enable change detection chỉ khi save
-                    db.Configuration.AutoDetectChangesEnabled = true;
-                    await db.SaveChangesAsync();
-                    db.Configuration.AutoDetectChangesEnabled = false;
+                    db.SaveChanges();
 
                     transaction.Commit();
 
-                    // Gửi email async và không chờ (fire-and-forget)
-                    // Điều này giúp response nhanh hơn
-                    _ = Task.Run(async () =>
+                    _= Task.Run(async () =>
                     {
                         try
                         {
-                            await _emailService.SendOrderConfirmationEmailAsync(order);
+                            await emailService.SendOrderConfirmationEmailAsync(order);
                         }
                         catch (Exception emailEx)
                         {
-                            // Log lỗi email
                             System.Diagnostics.Debug.WriteLine($"Email sending failed: {emailEx.Message}");
-                            // TODO: Có thể queue email để retry sau
                         }
                     });
 
                     return Ok(new
                     {
                         Message = "Tạo đơn hàng thành công.",
-                        OrderId = order.Id,
-                        TotalPrice = order.TotalPrice
+                        OrderId = order.Id
                     });
                 }
                 catch (Exception ex)
@@ -174,39 +196,31 @@ namespace SHOPAPI.Controllers
         }
 
         [Authorize(Roles = "ADMIN")]
-        [HttpGet]
+        [HttpPut]
         [Route("api/orders/{id}")]
-        public async Task<IHttpActionResult> GetOrderById(int id)
+        public IHttpActionResult updateOrder(int id, UpdateOrderStatusDto dto)
         {
-            var order = await db.Orders
-                .AsNoTracking()
-                .Include(o => o.OrderItems.Select(oi => oi.Product))
-                .Where(o => o.Id == id)
-                .Select(o => new OrderReadDto
+            var order = db.Orders.Include("OrderItems.Product").FirstOrDefault(o => o.Id == id);
+
+            if (order == null) return NotFound();
+
+            if (!Enum.TryParse(dto.Status, out OrderStatus newStatus))
+                return BadRequest("Trạng thái không hợp lệ.");
+
+            if (newStatus == OrderStatus.DaHuy && order.orderStatus != OrderStatus.DaHuy)
+            {
+                foreach (var orderItem in order.OrderItems)
                 {
-                    Id = o.Id,
-                    Name = o.Name,
-                    PhoneNumber = o.PhoneNumber,
-                    Email = o.Email,
-                    Address = o.Address,
-                    Note = o.Note,
-                    OrderDate = o.OrderDate,
-                    TotalPrice = o.TotalPrice,
-                    OrderStatus = o.orderStatus.ToString(),
-                    OrderItems = o.OrderItems.Select(oi => new OrderItemReadDto
-                    {
-                        ProductId = oi.ProductId,
-                        ProductName = oi.Product.Name,
-                        Quantity = oi.Quantity,
-                        PriceAtPurchase = oi.PriceAtPurchase,
-                    }).ToList()
-                })
-                .FirstOrDefaultAsync();
+                    var product = orderItem.Product;
+                    product.Quantity += orderItem.Quantity;
+                    product.IsOutOfStock = false;
+                }
+            }
 
-            if (order == null)
-                return NotFound();
+            order.orderStatus = newStatus;
+            db.SaveChanges();
 
-            return Ok(order);
+            return Ok("Cập nhật trạng thái đơn hàng thành công.");
         }
 
         [HttpPut]
@@ -216,8 +230,7 @@ namespace SHOPAPI.Controllers
             if (dto == null)
                 return BadRequest("Dữ liệu không hợp lệ.");
 
-            // Validate email nếu có
-            if (!string.IsNullOrEmpty(dto.Email) && !IsValidEmail(dto.Email))
+            if (!string.IsNullOrEmpty(dto.Email))
                 return BadRequest("Email không hợp lệ.");
 
             var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id);
@@ -225,11 +238,9 @@ namespace SHOPAPI.Controllers
             if (order == null)
                 return NotFound();
 
-            // Chỉ cho phép cập nhật khi đơn hàng đang xử lý
             if (order.orderStatus != OrderStatus.DangXuLy)
                 return BadRequest("Chỉ có thể cập nhật thông tin khi đơn hàng đang xử lý.");
 
-            // Cập nhật thông tin
             if (!string.IsNullOrEmpty(dto.Name))
                 order.Name = dto.Name;
 
@@ -242,73 +253,11 @@ namespace SHOPAPI.Controllers
             if (!string.IsNullOrEmpty(dto.Address))
                 order.Address = dto.Address;
 
-            // Note có thể là null hoặc empty
             order.Note = dto.Note;
 
-            db.Configuration.AutoDetectChangesEnabled = true;
-            await db.SaveChangesAsync();
-            db.Configuration.AutoDetectChangesEnabled = false;
 
+            db.SaveChanges();
             return Ok("Cập nhật thông tin đơn hàng thành công.");
-        }
-
-        [Authorize(Roles = "ADMIN")]
-        [HttpPut]
-        [Route("api/orders/{id}/status")]
-        public async Task<IHttpActionResult> UpdateOrderStatus(int id, UpdateOrderStatusDto dto)
-        {
-            // Sử dụng async để tối ưu performance
-            var order = await db.Orders
-                .Include(o => o.OrderItems.Select(oi => oi.Product))
-                .FirstOrDefaultAsync(o => o.Id == id);
-
-            if (order == null) return NotFound();
-
-            if (!Enum.TryParse(dto.Status, out OrderStatus newStatus))
-                return BadRequest("Trạng thái không hợp lệ.");
-
-            // Chỉ xử lý khi thay đổi sang trạng thái hủy
-            if (newStatus == OrderStatus.DaHuy && order.orderStatus != OrderStatus.DaHuy)
-            {
-                // Bulk update tồn kho
-                foreach (var orderItem in order.OrderItems)
-                {
-                    var product = orderItem.Product;
-                    product.Quantity += orderItem.Quantity;
-                    product.IsOutOfStock = false;
-                }
-            }
-
-            order.orderStatus = newStatus;
-
-            db.Configuration.AutoDetectChangesEnabled = true;
-            await db.SaveChangesAsync();
-            db.Configuration.AutoDetectChangesEnabled = false;
-
-            return Ok("Cập nhật trạng thái đơn hàng thành công.");
-        }
-
-        // Helper method để validate email
-        private bool IsValidEmail(string email)
-        {
-            try
-            {
-                var addr = new System.Net.Mail.MailAddress(email);
-                return addr.Address == email;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                db?.Dispose();
-            }
-            base.Dispose(disposing);
         }
     }
 }
