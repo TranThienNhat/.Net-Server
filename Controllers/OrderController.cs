@@ -227,37 +227,71 @@ namespace SHOPAPI.Controllers
         [Route("api/orders/{id}/info")]
         public async Task<IHttpActionResult> UpdateOrderInfo(int id, UpdateOrderInfoDto dto)
         {
+            // Kiểm tra tính hợp lệ của dữ liệu đầu vào
             if (dto == null)
                 return BadRequest("Dữ liệu không hợp lệ.");
 
-            if (!string.IsNullOrEmpty(dto.Email))
+            // Kiểm tra email hợp lệ
+            if (string.IsNullOrWhiteSpace(dto.Email) || !IsValidEmail(dto.Email))
                 return BadRequest("Email không hợp lệ.");
 
-            var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id);
+            try
+            {
+                // Tìm đơn hàng theo ID
+                var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id);
+                if (order == null)
+                    return NotFound();
 
-            if (order == null)
-                return NotFound();
+                // Kiểm tra trạng thái đơn hàng
+                if (order.orderStatus != OrderStatus.DangXuLy)
+                    return BadRequest("Chỉ có thể cập nhật thông tin khi đơn hàng đang xử lý.");
 
-            if (order.orderStatus != OrderStatus.DangXuLy)
-                return BadRequest("Chỉ có thể cập nhật thông tin khi đơn hàng đang xử lý.");
+                // Cập nhật thông tin (chỉ cập nhật khi có giá trị hợp lệ)
+                if (!string.IsNullOrWhiteSpace(dto.Name))
+                    order.Name = dto.Name.Trim();
 
-            if (!string.IsNullOrEmpty(dto.Name))
-                order.Name = dto.Name;
+                if (!string.IsNullOrWhiteSpace(dto.PhoneNumber))
+                    order.PhoneNumber = dto.PhoneNumber.Trim();
 
-            if (!string.IsNullOrEmpty(dto.PhoneNumber))
-                order.PhoneNumber = dto.PhoneNumber;
+                if (!string.IsNullOrWhiteSpace(dto.Email))
+                    order.Email = dto.Email.Trim();
 
-            if (!string.IsNullOrEmpty(dto.Email))
-                order.Email = dto.Email;
+                if (!string.IsNullOrWhiteSpace(dto.Address))
+                    order.Address = dto.Address.Trim();
 
-            if (!string.IsNullOrEmpty(dto.Address))
-                order.Address = dto.Address;
+                // Note có thể là null hoặc empty
+                order.Note = dto.Note?.Trim();
 
-            order.Note = dto.Note;
+                // Cập nhật thời gian sửa đổi (nếu có field này)
+                // order.UpdatedAt = DateTime.UtcNow;
 
+                await db.SaveChangesAsync();
 
-            db.SaveChanges();
-            return Ok("Cập nhật thông tin đơn hàng thành công.");
+                return Ok(new
+                {
+                    message = "Cập nhật thông tin đơn hàng thành công.",
+                    orderId = id
+                });
+            }
+            catch (Exception ex)
+            {
+                // Log exception ở đây
+                return InternalServerError(new Exception("Có lỗi xảy ra khi cập nhật đơn hàng."));
+            }
+        }
+
+        // Helper method để kiểm tra email hợp lệ
+        private bool IsValidEmail(string email)
+        {
+            try
+            {
+                var addr = new System.Net.Mail.MailAddress(email);
+                return addr.Address == email;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }
