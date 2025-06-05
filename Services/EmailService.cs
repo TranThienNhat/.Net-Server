@@ -1,18 +1,18 @@
-﻿using System;
+﻿using iTextSharp.text;
+using iTextSharp.text.pdf;
+using iTextSharp.text.pdf.draw;
+using SHOPAPI.Models;
+using System;
+using System.Configuration;
+using System.IO;
 using System.Net;
 using System.Net.Mail;
 using System.Threading.Tasks;
-using System.Configuration;
-using SHOPAPI.Models;
 
 namespace SHOPAPI.Services
 {
-    public interface IEmailService
-    {
-        Task SendOrderConfirmationEmailAsync(Order order);
-    }
 
-    public class EmailService : IEmailService
+    public class EmailService
     {
         private readonly string _smtpHost;
         private readonly int _smtpPort;
@@ -57,6 +57,273 @@ namespace SHOPAPI.Services
                 // Log lỗi (có thể dùng NLog, Serilog, etc.)
                 System.Diagnostics.Debug.WriteLine($"Email sending failed: {ex.Message}");
                 throw; // hoặc xử lý lỗi theo cách khác
+            }
+        }
+
+        public async Task SendInvoiceEmailAsync(Order order)
+        {
+            try
+            {
+                using (var client = new SmtpClient(_smtpHost, _smtpPort))
+                {
+                    client.EnableSsl = true;
+                    client.Credentials = new NetworkCredential(_smtpUsername, _smtpPassword);
+
+                    var mailMessage = new MailMessage
+                    {
+                        From = new MailAddress(_fromEmail),
+                        Subject = $"Hóa đơn cho đơn hàng #{order.Id}",
+                        Body = $"Chào {order.Name},\n\nCảm ơn bạn đã đặt hàng. Vui lòng xem hóa đơn đính kèm.\n\nTrân trọng.",
+                        IsBodyHtml = false
+                    };
+
+                    mailMessage.To.Add(order.Email);
+
+                    // Generate PDF
+                    var pdfBytes = GenerateInvoicePdf(order);
+                    var attachment = new Attachment(new MemoryStream(pdfBytes), $"Invoice_{order.Id}.pdf", "application/pdf");
+                    mailMessage.Attachments.Add(attachment);
+
+                    await client.SendMailAsync(mailMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Email with PDF failed: {ex.Message}");
+                throw;
+            }
+        }
+
+
+
+
+        public byte[] GenerateInvoicePdf(Order order)
+        {
+            using (var ms = new MemoryStream())
+            {
+                Document doc = new Document(PageSize.A4, 40, 40, 40, 40);
+                PdfWriter.GetInstance(doc, ms);
+                doc.Open();
+
+                // Fonts
+                var titleFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 20, BaseColor.DARK_GRAY);
+                var headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, BaseColor.BLACK);
+                var subHeaderFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12, BaseColor.BLACK);
+                var normalFont = FontFactory.GetFont(FontFactory.HELVETICA, 11, BaseColor.BLACK);
+                var smallFont = FontFactory.GetFont(FontFactory.HELVETICA, 10, BaseColor.GRAY);
+
+                // === HEADER SECTION ===
+                // Company name and logo area
+                PdfPTable headerTable = new PdfPTable(2);
+                headerTable.WidthPercentage = 100;
+                headerTable.SetWidths(new float[] { 60f, 40f });
+
+                // Left side - Company info
+                PdfPCell companyCell = new PdfPCell();
+                companyCell.Border = Rectangle.NO_BORDER;
+                companyCell.AddElement(new Paragraph("SIMPLE HOUSE", titleFont));
+                companyCell.AddElement(new Paragraph("Cua hang noi that simple house", smallFont));
+                companyCell.AddElement(new Paragraph("Hotline: 0123-456-789", smallFont));
+                companyCell.AddElement(new Paragraph("Email: simplehouse123@gmail.com", smallFont));
+                headerTable.AddCell(companyCell);
+
+                // Right side - Invoice info
+                PdfPCell invoiceInfoCell = new PdfPCell();
+                invoiceInfoCell.Border = Rectangle.NO_BORDER;
+                invoiceInfoCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+                invoiceInfoCell.AddElement(new Paragraph("HOA DON BAN HANG", headerFont));
+                invoiceInfoCell.AddElement(new Paragraph($"So: #{order.Id}", normalFont));
+                invoiceInfoCell.AddElement(new Paragraph($"Ngay: {order.OrderDate:dd/MM/yyyy}", normalFont));
+                invoiceInfoCell.AddElement(new Paragraph($"Gio: {order.OrderDate:HH:mm}", normalFont));
+                headerTable.AddCell(invoiceInfoCell);
+
+                doc.Add(headerTable);
+
+                // Separator line
+                LineSeparator line = new LineSeparator(1f, 100f, BaseColor.LIGHT_GRAY, Element.ALIGN_CENTER, -2);
+                doc.Add(new Chunk(line));
+                doc.Add(new Paragraph(" ")); // Space
+
+                // === CUSTOMER INFORMATION ===
+                Paragraph customerTitle = new Paragraph("THONG TIN KHACH HANG", subHeaderFont);
+                customerTitle.SpacingBefore = 10f;
+                customerTitle.SpacingAfter = 5f;
+                doc.Add(customerTitle);
+
+                PdfPTable customerTable = new PdfPTable(2);
+                customerTable.WidthPercentage = 100;
+                customerTable.SetWidths(new float[] { 50f, 50f });
+
+                // Left column
+                PdfPCell leftCustomerCell = new PdfPCell();
+                leftCustomerCell.Border = Rectangle.NO_BORDER;
+                leftCustomerCell.Padding = 5;
+                if (!string.IsNullOrEmpty(order.Name))
+                    leftCustomerCell.AddElement(new Paragraph($"Ho ten: {order.Name}", normalFont));
+                if (!string.IsNullOrEmpty(order.PhoneNumber))
+                    leftCustomerCell.AddElement(new Paragraph($"Dien thoai: {order.PhoneNumber}", normalFont));
+                if (!string.IsNullOrEmpty(order.Email))
+                    leftCustomerCell.AddElement(new Paragraph($"Email: {order.Email}", normalFont));
+                customerTable.AddCell(leftCustomerCell);
+
+                // Right column  
+                PdfPCell rightCustomerCell = new PdfPCell();
+                rightCustomerCell.Border = Rectangle.NO_BORDER;
+                rightCustomerCell.Padding = 5;
+                if (!string.IsNullOrEmpty(order.Address))
+                    rightCustomerCell.AddElement(new Paragraph($"Dia chi: {order.Address}", normalFont));
+                if (!string.IsNullOrEmpty(order.Note))
+                    rightCustomerCell.AddElement(new Paragraph($"Ghi chu: {order.Note}", normalFont));
+                customerTable.AddCell(rightCustomerCell);
+
+                doc.Add(customerTable);
+                doc.Add(new Paragraph(" ")); // Space
+
+                // === PRODUCT TABLE ===
+                Paragraph productTitle = new Paragraph("CHI TIET DON HANG", subHeaderFont);
+                productTitle.SpacingBefore = 10f;
+                productTitle.SpacingAfter = 10f;
+                doc.Add(productTitle);
+
+                PdfPTable productTable = new PdfPTable(5);
+                productTable.WidthPercentage = 100;
+                productTable.SetWidths(new float[] { 8f, 35f, 15f, 20f, 22f });
+
+                // Table headers with nice styling
+                string[] headers = { "STT", "Ten san pham", "So luong", "Don gia", "Thanh tien" };
+                foreach (string headerText in headers)
+                {
+                    PdfPCell headerCell = new PdfPCell(new Phrase(headerText, subHeaderFont));
+                    headerCell.BackgroundColor = new BaseColor(240, 240, 240);
+                    headerCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                    headerCell.VerticalAlignment = Element.ALIGN_MIDDLE;
+                    headerCell.Padding = 8;
+                    headerCell.Border = Rectangle.BOX;
+                    headerCell.BorderColor = BaseColor.GRAY;
+                    productTable.AddCell(headerCell);
+                }
+
+                // Product rows
+                int stt = 1;
+                decimal grandTotal = 0;
+
+                foreach (var item in order.OrderItems)
+                {
+                    decimal itemTotal = item.Quantity * item.Product.Price;
+                    grandTotal += itemTotal;
+
+                    // STT
+                    PdfPCell sttCell = new PdfPCell(new Phrase(stt.ToString(), normalFont));
+                    sttCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                    sttCell.Padding = 6;
+                    sttCell.Border = Rectangle.BOX;
+                    sttCell.BorderColor = BaseColor.LIGHT_GRAY;
+                    productTable.AddCell(sttCell);
+
+                    // Product name
+                    PdfPCell nameCell = new PdfPCell(new Phrase(item.Product.Name, normalFont));
+                    nameCell.Padding = 6;
+                    nameCell.Border = Rectangle.BOX;
+                    nameCell.BorderColor = BaseColor.LIGHT_GRAY;
+                    productTable.AddCell(nameCell);
+
+                    // Quantity
+                    PdfPCell qtyCell = new PdfPCell(new Phrase(item.Quantity.ToString(), normalFont));
+                    qtyCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                    qtyCell.Padding = 6;
+                    qtyCell.Border = Rectangle.BOX;
+                    qtyCell.BorderColor = BaseColor.LIGHT_GRAY;
+                    productTable.AddCell(qtyCell);
+
+                    // Unit price
+                    PdfPCell priceCell = new PdfPCell(new Phrase($"{item.Product.Price:N0} VND", normalFont));
+                    priceCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+                    priceCell.Padding = 6;
+                    priceCell.Border = Rectangle.BOX;
+                    priceCell.BorderColor = BaseColor.LIGHT_GRAY;
+                    productTable.AddCell(priceCell);
+
+                    // Total
+                    PdfPCell totalCell = new PdfPCell(new Phrase($"{itemTotal:N0} VND", normalFont));
+                    totalCell.HorizontalAlignment = Element.ALIGN_RIGHT;
+                    totalCell.Padding = 6;
+                    totalCell.Border = Rectangle.BOX;
+                    totalCell.BorderColor = BaseColor.LIGHT_GRAY;
+                    productTable.AddCell(totalCell);
+
+                    stt++;
+                }
+
+                doc.Add(productTable);
+
+                // === TOTAL SECTION ===
+                PdfPTable totalTable = new PdfPTable(2);
+                totalTable.WidthPercentage = 100;
+                totalTable.SetWidths(new float[] { 70f, 30f });
+                totalTable.SpacingBefore = 15f;
+
+                // Empty cell for spacing
+                PdfPCell emptyCell = new PdfPCell();
+                emptyCell.Border = Rectangle.NO_BORDER;
+                totalTable.AddCell(emptyCell);
+
+                // Total amount
+                PdfPCell totalAmountCell = new PdfPCell();
+                totalAmountCell.Border = Rectangle.BOX;
+                totalAmountCell.BorderColor = BaseColor.GRAY;
+                totalAmountCell.BackgroundColor = new BaseColor(250, 250, 250);
+                totalAmountCell.Padding = 10;
+                totalAmountCell.AddElement(new Paragraph("TONG CONG", subHeaderFont));
+                totalAmountCell.AddElement(new Paragraph($"{grandTotal:N0} VND", headerFont));
+                totalAmountCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                totalTable.AddCell(totalAmountCell);
+
+                doc.Add(totalTable);
+
+                // === SIGNATURE SECTION ===
+                PdfPTable signatureTable = new PdfPTable(2);
+                signatureTable.WidthPercentage = 100;
+                signatureTable.SetWidths(new float[] { 50f, 50f });
+                signatureTable.SpacingBefore = 30f;
+
+                // Customer signature
+                PdfPCell customerSigCell = new PdfPCell();
+                customerSigCell.Border = Rectangle.NO_BORDER;
+                customerSigCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                customerSigCell.AddElement(new Paragraph("KHACH HANG", subHeaderFont));
+                customerSigCell.AddElement(new Paragraph("(Ky ten)", smallFont));
+                customerSigCell.AddElement(new Paragraph(" ", normalFont)); // Space for signature
+                customerSigCell.AddElement(new Paragraph(" ", normalFont));
+                customerSigCell.AddElement(new Paragraph(" ", normalFont));
+                signatureTable.AddCell(customerSigCell);
+
+                // Seller signature
+                PdfPCell sellerSigCell = new PdfPCell();
+                sellerSigCell.Border = Rectangle.NO_BORDER;
+                sellerSigCell.HorizontalAlignment = Element.ALIGN_CENTER;
+                sellerSigCell.AddElement(new Paragraph("NGUOI BAN", subHeaderFont));
+                sellerSigCell.AddElement(new Paragraph("(Ky ten)", smallFont));
+                sellerSigCell.AddElement(new Paragraph(" ", normalFont)); // Space for signature
+                sellerSigCell.AddElement(new Paragraph(" ", normalFont));
+                sellerSigCell.AddElement(new Paragraph(" ", normalFont));
+                sellerSigCell.AddElement(new Paragraph("Simple House", normalFont));
+                signatureTable.AddCell(sellerSigCell);
+
+                doc.Add(signatureTable);
+
+                // === FOOTER ===
+                Paragraph footer = new Paragraph("Cam on quy khach da mua hang! Hen gap lai!", smallFont);
+                footer.Alignment = Element.ALIGN_CENTER;
+                footer.SpacingBefore = 20f;
+                doc.Add(footer);
+
+                Paragraph footerLine2 = new Paragraph("*** HOA DON KHONG CO GIA TRI THUE ***", smallFont);
+                footerLine2.Alignment = Element.ALIGN_CENTER;
+                footerLine2.SpacingBefore = 5f;
+                doc.Add(footerLine2);
+
+                doc.Close();
+                return ms.ToArray();
             }
         }
 

@@ -14,7 +14,6 @@ namespace SHOPAPI.Controllers
     {
         private readonly AppDbContext db = new AppDbContext();
 
-        [Authorize(Roles = "ADMIN")]
         [HttpGet]
         [Route("api/category")]
         public IHttpActionResult GetCategory()

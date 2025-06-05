@@ -18,12 +18,7 @@ namespace SHOPAPI.Controllers
     public class OrderController : ApiController
     {
         private readonly AppDbContext db = new AppDbContext();
-        private readonly IEmailService emailService;
-
-        public OrderController()
-        {
-            emailService = new EmailService();
-        }
+        private readonly EmailService emailService = new EmailService();
 
         [Authorize(Roles = "ADMIN")]
         [HttpGet]
@@ -55,6 +50,7 @@ namespace SHOPAPI.Controllers
             return Ok(orders);
         }
 
+        [Authorize(Roles = "ADMIN")]
         [HttpGet]
         [Route("api/orders/{id}")]
         public async Task<IHttpActionResult> GetOrderById(int id)
@@ -90,6 +86,7 @@ namespace SHOPAPI.Controllers
             return Ok(order);
         }
 
+        [Authorize(Roles = "ADMIN")]
         [HttpPost]
         [Route("api/orders/create")]
         public async Task<IHttpActionResult> CreateOrder(OrderCreateDto dto)
@@ -223,6 +220,7 @@ namespace SHOPAPI.Controllers
             return Ok("Cập nhật trạng thái đơn hàng thành công.");
         }
 
+        [Authorize(Roles = "ADMIN")]
         [HttpPut]
         [Route("api/orders/{id}/info")]
         public async Task<IHttpActionResult> UpdateOrderInfo(int id, UpdateOrderInfoDto dto)
@@ -277,6 +275,34 @@ namespace SHOPAPI.Controllers
             {
                 // Log exception ở đây
                 return InternalServerError(new Exception("Có lỗi xảy ra khi cập nhật đơn hàng."));
+            }
+        }
+
+        [Authorize(Roles = "ADMIN")]
+        [HttpPut]
+        [Route("api/orders/{id}/sendinvoice")]
+        public async Task<IHttpActionResult> SendInvoicePdf(int id)
+        {
+            var order = await db.Orders
+                .Include(o => o.OrderItems.Select(oi => oi.Product))
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+            if (order == null)
+                return NotFound();
+
+            try
+            {
+                await emailService.SendInvoiceEmailAsync(order);
+
+                return Ok(new
+                {
+                    message = $"Hóa đơn PDF đã được gửi đến {order.Email}."
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Gửi hóa đơn thất bại: {ex.Message}");
+                return InternalServerError(new Exception("Gửi hóa đơn thất bại."));
             }
         }
 
