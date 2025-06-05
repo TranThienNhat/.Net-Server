@@ -204,6 +204,7 @@
     <Compile Include="DTOs\Order\OrderItemDto.cs" />
     <Compile Include="DTOs\Order\OrderItemReadDto.cs" />
     <Compile Include="DTOs\Order\OrderReadDto.cs" />
+    <Compile Include="DTOs\Order\OrderReportRequestDto.cs" />
     <Compile Include="DTOs\Order\UpdateOrderInfoDto.cs" />
     <Compile Include="DTOs\Order\UpdateOrderStatusDto.cs" />
     <Compile Include="DTOs\Product\ProductReadDto.cs" />
@@ -226,6 +227,7 @@
     <Compile Include="Models\Product.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\EmailService.cs" />
+    <Compile Include="Services\InvoiceService.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="ApplicationInsights.config" />

@@ -1,4 +1,5 @@
 ﻿using API.DTOs.Order;
+using API.Services;
 using SHOPAPI.Data;
 using SHOPAPI.DTOs.Order;
 using SHOPAPI.Models;
@@ -19,6 +20,7 @@ namespace SHOPAPI.Controllers
     {
         private readonly AppDbContext db = new AppDbContext();
         private readonly EmailService emailService = new EmailService();
+        private readonly InvoiceService invoiceService = new InvoiceService();
 
         [Authorize(Roles = "ADMIN")]
         [HttpGet]
@@ -292,7 +294,7 @@ namespace SHOPAPI.Controllers
 
             try
             {
-                await emailService.SendInvoiceEmailAsync(order);
+                await invoiceService.SendInvoiceEmailAsync(order);
 
                 return Ok(new
                 {
@@ -306,6 +308,7 @@ namespace SHOPAPI.Controllers
             }
         }
 
+        [Authorize(Roles = "ADMIN")]
         [HttpGet]
         [Route("api/orders/{id}/invoicepdf")]
         public async Task<HttpResponseMessage> GetInvoicePdf(int id)
@@ -320,7 +323,7 @@ namespace SHOPAPI.Controllers
             try
             {
                 // Tạo PDF
-                var pdfBytes = emailService.GenerateInvoicePdf(order);
+                var pdfBytes = invoiceService.GenerateInvoicePdf(order);
 
                 var result = new HttpResponseMessage(HttpStatusCode.OK)
                 {
@@ -338,6 +341,90 @@ namespace SHOPAPI.Controllers
             catch (Exception ex)
             {
                 return Request.CreateErrorResponse(HttpStatusCode.InternalServerError, ex.Message);
+            }
+        }
+
+        [Authorize(Roles = "ADMIN")]
+        [HttpPost]
+        [Route("api/orders/report")]
+        public async Task<IHttpActionResult> GetOrderReport(OrderReportRequestDto dto)
+        {
+            if (dto == null)
+                return BadRequest("Dữ liệu không hợp lệ.");
+
+            if (string.IsNullOrWhiteSpace(dto.PhoneNumber))
+                return BadRequest("Số điện thoại là bắt buộc.");
+
+            try
+            {
+                // Nếu OrderDate null thì lấy ngày hôm nay
+                DateTime targetDate = dto.OrderDate ?? DateTime.Today;
+
+                // Tìm các đơn hàng theo số điện thoại và ngày
+                var orders = await db.Orders
+                    .Include(o => o.OrderItems.Select(oi => oi.Product))
+                    .Where(o => o.PhoneNumber == dto.PhoneNumber.Trim() &&
+                               DbFunctions.TruncateTime(o.OrderDate) == targetDate.Date &&
+                               o.orderStatus == OrderStatus.DaGiao) // Thêm điều kiện trạng thái đơn hàng
+                    .OrderBy(o => o.OrderDate)
+                    .ToListAsync();
+
+
+                if (!orders.Any())
+                {
+                    return Ok(new
+                    {
+                        Message = "Không tìm thấy đơn hàng nào với số điện thoại và ngày đã chọn.",
+                        PhoneNumber = dto.PhoneNumber,
+                        OrderDate = targetDate.ToString("dd/MM/yyyy"),
+                        OrderCount = 0
+                    });
+                }
+
+                // Tạo PDF báo cáo
+                var pdfBytes = invoiceService.GenerateMultipleOrdersPdf(orders);
+
+                if (dto.SendConfirmation)
+                {
+                    // Gửi email với PDF đính kèm
+                    try
+                    {
+                        await invoiceService.SendMultiInvoiceEmailAsync(orders);
+
+                        return Ok(new
+                        {
+                            Message = $"Đã gửi báo cáo {orders.Count} đơn hàng đến email {orders.First().Email}",
+                            PhoneNumber = dto.PhoneNumber,
+                            OrderDate = targetDate.ToString("dd/MM/yyyy"),
+                            OrderCount = orders.Count,
+                            OrderIds = orders.Select(o => o.Id).ToList(),
+                            TotalAmount = orders.Sum(o => o.TotalPrice),
+                            EmailSent = true
+                        });
+                    }
+                    catch (Exception emailEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Gửi email thất bại: {emailEx.Message}");
+                        return InternalServerError(new Exception("Tạo báo cáo thành công nhưng gửi email thất bại."));
+                    }
+                }
+                else
+                {
+                    // Trả về file PDF trực tiếp
+                    var response = Request.CreateResponse(HttpStatusCode.OK);
+                    response.Content = new ByteArrayContent(pdfBytes);
+                    response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+                    response.Content.Headers.ContentDisposition = new System.Net.Http.Headers.ContentDispositionHeaderValue("inline")
+                    {
+                        FileName = $"BaoCao_DonHang_{dto.PhoneNumber}_{targetDate:yyyyMMdd}.pdf"
+                    };
+                    return ResponseMessage(response);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Lỗi tạo báo cáo đơn hàng: {ex.Message}");
+                return InternalServerError(new Exception("Có lỗi xảy ra khi tạo báo cáo đơn hàng."));
             }
         }
 
