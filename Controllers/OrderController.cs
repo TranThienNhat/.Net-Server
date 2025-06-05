@@ -306,6 +306,42 @@ namespace SHOPAPI.Controllers
             }
         }
 
+        [HttpGet]
+        [Route("api/orders/{id}/invoicepdf")]
+        public async Task<HttpResponseMessage> GetInvoicePdf(int id)
+        {
+            var order = await db.Orders
+                .Include(o => o.OrderItems.Select(oi => oi.Product))
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+            if (order == null)
+                return Request.CreateResponse(HttpStatusCode.NotFound, "Không tìm thấy đơn hàng.");
+
+            try
+            {
+                // Tạo PDF
+                var pdfBytes = emailService.GenerateInvoicePdf(order);
+
+                var result = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(pdfBytes)
+                };
+
+                result.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+                result.Content.Headers.ContentDisposition = new System.Net.Http.Headers.ContentDispositionHeaderValue("inline")
+                {
+                    FileName = $"Invoice_Order_{order.Id}.pdf"
+                };
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                return Request.CreateErrorResponse(HttpStatusCode.InternalServerError, ex.Message);
+            }
+        }
+
+
         // Helper method để kiểm tra email hợp lệ
         private bool IsValidEmail(string email)
         {
