@@ -86,7 +86,7 @@ namespace SHOPAPI.Controllers
             return Ok(order);
         }
 
-        [Authorize(Roles = "ADMIN")]
+        
         [HttpPost]
         [Route("api/orders/create")]
         public async Task<IHttpActionResult> CreateOrder(OrderCreateDto dto)
