@@ -105,15 +105,18 @@ namespace SHOPAPI.Services
                 PdfWriter.GetInstance(doc, ms);
                 doc.Open();
 
-                // Fonts
-                var titleFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 20, BaseColor.DARK_GRAY);
-                var headerFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 14, BaseColor.BLACK);
-                var subHeaderFont = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12, BaseColor.BLACK);
-                var normalFont = FontFactory.GetFont(FontFactory.HELVETICA, 11, BaseColor.BLACK);
-                var smallFont = FontFactory.GetFont(FontFactory.HELVETICA, 10, BaseColor.GRAY);
+                // === FONTS VỚI HỖ TRỢ UNICODE ===
+                // Sử dụng font hỗ trợ Unicode - cách 1: Sử dụng font có sẵn
+                string fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf");
+                BaseFont baseFont = BaseFont.CreateFont(fontPath, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+
+                var titleFont = new Font(baseFont, 20, Font.BOLD, BaseColor.DARK_GRAY);
+                var headerFont = new Font(baseFont, 14, Font.BOLD, BaseColor.BLACK);
+                var subHeaderFont = new Font(baseFont, 12, Font.BOLD, BaseColor.BLACK);
+                var normalFont = new Font(baseFont, 11, Font.NORMAL, BaseColor.BLACK);
+                var smallFont = new Font(baseFont, 10, Font.NORMAL, BaseColor.GRAY);
 
                 // === HEADER SECTION ===
-                // Company name and logo area
                 PdfPTable headerTable = new PdfPTable(2);
                 headerTable.WidthPercentage = 100;
                 headerTable.SetWidths(new float[] { 60f, 40f });
@@ -122,7 +125,7 @@ namespace SHOPAPI.Services
                 PdfPCell companyCell = new PdfPCell();
                 companyCell.Border = Rectangle.NO_BORDER;
                 companyCell.AddElement(new Paragraph("SIMPLE HOUSE", titleFont));
-                companyCell.AddElement(new Paragraph("Cua hang noi that simple house", smallFont));
+                companyCell.AddElement(new Paragraph("Cửa hàng nội thất Simple House", smallFont));
                 companyCell.AddElement(new Paragraph("Hotline: 0123-456-789", smallFont));
                 companyCell.AddElement(new Paragraph("Email: simplehouse123@gmail.com", smallFont));
                 headerTable.AddCell(companyCell);
@@ -131,10 +134,10 @@ namespace SHOPAPI.Services
                 PdfPCell invoiceInfoCell = new PdfPCell();
                 invoiceInfoCell.Border = Rectangle.NO_BORDER;
                 invoiceInfoCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-                invoiceInfoCell.AddElement(new Paragraph("HOA DON BAN HANG", headerFont));
-                invoiceInfoCell.AddElement(new Paragraph($"So: #{order.Id}", normalFont));
-                invoiceInfoCell.AddElement(new Paragraph($"Ngay: {order.OrderDate:dd/MM/yyyy}", normalFont));
-                invoiceInfoCell.AddElement(new Paragraph($"Gio: {order.OrderDate:HH:mm}", normalFont));
+                invoiceInfoCell.AddElement(new Paragraph("HÓA ĐƠN BÁN HÀNG", headerFont));
+                invoiceInfoCell.AddElement(new Paragraph($"Số: #{order.Id}", normalFont));
+                invoiceInfoCell.AddElement(new Paragraph($"Ngày: {order.OrderDate:dd/MM/yyyy}", normalFont));
+                invoiceInfoCell.AddElement(new Paragraph($"Giờ: {order.OrderDate:HH:mm}", normalFont));
                 headerTable.AddCell(invoiceInfoCell);
 
                 doc.Add(headerTable);
@@ -145,7 +148,7 @@ namespace SHOPAPI.Services
                 doc.Add(new Paragraph(" ")); // Space
 
                 // === CUSTOMER INFORMATION ===
-                Paragraph customerTitle = new Paragraph("THONG TIN KHACH HANG", subHeaderFont);
+                Paragraph customerTitle = new Paragraph("THÔNG TIN KHÁCH HÀNG", subHeaderFont);
                 customerTitle.SpacingBefore = 10f;
                 customerTitle.SpacingAfter = 5f;
                 doc.Add(customerTitle);
@@ -159,9 +162,9 @@ namespace SHOPAPI.Services
                 leftCustomerCell.Border = Rectangle.NO_BORDER;
                 leftCustomerCell.Padding = 5;
                 if (!string.IsNullOrEmpty(order.Name))
-                    leftCustomerCell.AddElement(new Paragraph($"Ho ten: {order.Name}", normalFont));
+                    leftCustomerCell.AddElement(new Paragraph($"Họ tên: {order.Name}", normalFont));
                 if (!string.IsNullOrEmpty(order.PhoneNumber))
-                    leftCustomerCell.AddElement(new Paragraph($"Dien thoai: {order.PhoneNumber}", normalFont));
+                    leftCustomerCell.AddElement(new Paragraph($"Điện thoại: {order.PhoneNumber}", normalFont));
                 if (!string.IsNullOrEmpty(order.Email))
                     leftCustomerCell.AddElement(new Paragraph($"Email: {order.Email}", normalFont));
                 customerTable.AddCell(leftCustomerCell);
@@ -171,16 +174,16 @@ namespace SHOPAPI.Services
                 rightCustomerCell.Border = Rectangle.NO_BORDER;
                 rightCustomerCell.Padding = 5;
                 if (!string.IsNullOrEmpty(order.Address))
-                    rightCustomerCell.AddElement(new Paragraph($"Dia chi: {order.Address}", normalFont));
+                    rightCustomerCell.AddElement(new Paragraph($"Địa chỉ: {order.Address}", normalFont));
                 if (!string.IsNullOrEmpty(order.Note))
-                    rightCustomerCell.AddElement(new Paragraph($"Ghi chu: {order.Note}", normalFont));
+                    rightCustomerCell.AddElement(new Paragraph($"Ghi chú: {order.Note}", normalFont));
                 customerTable.AddCell(rightCustomerCell);
 
                 doc.Add(customerTable);
                 doc.Add(new Paragraph(" ")); // Space
 
                 // === PRODUCT TABLE ===
-                Paragraph productTitle = new Paragraph("CHI TIET DON HANG", subHeaderFont);
+                Paragraph productTitle = new Paragraph("CHI TIẾT ĐƠN HÀNG", subHeaderFont);
                 productTitle.SpacingBefore = 10f;
                 productTitle.SpacingAfter = 10f;
                 doc.Add(productTitle);
@@ -190,7 +193,7 @@ namespace SHOPAPI.Services
                 productTable.SetWidths(new float[] { 8f, 35f, 15f, 20f, 22f });
 
                 // Table headers with nice styling
-                string[] headers = { "STT", "Ten san pham", "So luong", "Don gia", "Thanh tien" };
+                string[] headers = { "STT", "Tên sản phẩm", "Số lượng", "Đơn giá", "Thành tiền" };
                 foreach (string headerText in headers)
                 {
                     PdfPCell headerCell = new PdfPCell(new Phrase(headerText, subHeaderFont));
@@ -236,7 +239,7 @@ namespace SHOPAPI.Services
                     productTable.AddCell(qtyCell);
 
                     // Unit price
-                    PdfPCell priceCell = new PdfPCell(new Phrase($"{item.Product.Price:N0} VND", normalFont));
+                    PdfPCell priceCell = new PdfPCell(new Phrase($"{item.Product.Price:N0} VNĐ", normalFont));
                     priceCell.HorizontalAlignment = Element.ALIGN_RIGHT;
                     priceCell.Padding = 6;
                     priceCell.Border = Rectangle.BOX;
@@ -244,7 +247,7 @@ namespace SHOPAPI.Services
                     productTable.AddCell(priceCell);
 
                     // Total
-                    PdfPCell totalCell = new PdfPCell(new Phrase($"{itemTotal:N0} VND", normalFont));
+                    PdfPCell totalCell = new PdfPCell(new Phrase($"{itemTotal:N0} VNĐ", normalFont));
                     totalCell.HorizontalAlignment = Element.ALIGN_RIGHT;
                     totalCell.Padding = 6;
                     totalCell.Border = Rectangle.BOX;
@@ -273,8 +276,8 @@ namespace SHOPAPI.Services
                 totalAmountCell.BorderColor = BaseColor.GRAY;
                 totalAmountCell.BackgroundColor = new BaseColor(250, 250, 250);
                 totalAmountCell.Padding = 10;
-                totalAmountCell.AddElement(new Paragraph("TONG CONG", subHeaderFont));
-                totalAmountCell.AddElement(new Paragraph($"{grandTotal:N0} VND", headerFont));
+                totalAmountCell.AddElement(new Paragraph("TỔNG CỘNG", subHeaderFont));
+                totalAmountCell.AddElement(new Paragraph($"{grandTotal:N0} VNĐ", headerFont));
                 totalAmountCell.HorizontalAlignment = Element.ALIGN_CENTER;
                 totalTable.AddCell(totalAmountCell);
 
@@ -290,8 +293,8 @@ namespace SHOPAPI.Services
                 PdfPCell customerSigCell = new PdfPCell();
                 customerSigCell.Border = Rectangle.NO_BORDER;
                 customerSigCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                customerSigCell.AddElement(new Paragraph("KHACH HANG", subHeaderFont));
-                customerSigCell.AddElement(new Paragraph("(Ky ten)", smallFont));
+                customerSigCell.AddElement(new Paragraph("KHÁCH HÀNG", subHeaderFont));
+                customerSigCell.AddElement(new Paragraph("(Ký tên)", smallFont));
                 customerSigCell.AddElement(new Paragraph(" ", normalFont)); // Space for signature
                 customerSigCell.AddElement(new Paragraph(" ", normalFont));
                 customerSigCell.AddElement(new Paragraph(" ", normalFont));
@@ -301,8 +304,8 @@ namespace SHOPAPI.Services
                 PdfPCell sellerSigCell = new PdfPCell();
                 sellerSigCell.Border = Rectangle.NO_BORDER;
                 sellerSigCell.HorizontalAlignment = Element.ALIGN_CENTER;
-                sellerSigCell.AddElement(new Paragraph("NGUOI BAN", subHeaderFont));
-                sellerSigCell.AddElement(new Paragraph("(Ky ten)", smallFont));
+                sellerSigCell.AddElement(new Paragraph("NGƯỜI BÁN", subHeaderFont));
+                sellerSigCell.AddElement(new Paragraph("(Ký tên)", smallFont));
                 sellerSigCell.AddElement(new Paragraph(" ", normalFont)); // Space for signature
                 sellerSigCell.AddElement(new Paragraph(" ", normalFont));
                 sellerSigCell.AddElement(new Paragraph(" ", normalFont));
@@ -312,12 +315,12 @@ namespace SHOPAPI.Services
                 doc.Add(signatureTable);
 
                 // === FOOTER ===
-                Paragraph footer = new Paragraph("Cam on quy khach da mua hang! Hen gap lai!", smallFont);
+                Paragraph footer = new Paragraph("Cảm ơn quý khách đã mua hàng! Hẹn gặp lại!", smallFont);
                 footer.Alignment = Element.ALIGN_CENTER;
                 footer.SpacingBefore = 20f;
                 doc.Add(footer);
 
-                Paragraph footerLine2 = new Paragraph("*** HOA DON KHONG CO GIA TRI THUE ***", smallFont);
+                Paragraph footerLine2 = new Paragraph("*** HÓA ĐƠN KHÔNG CÓ GIÁ TRỊ THUẾ ***", smallFont);
                 footerLine2.Alignment = Element.ALIGN_CENTER;
                 footerLine2.SpacingBefore = 5f;
                 doc.Add(footerLine2);

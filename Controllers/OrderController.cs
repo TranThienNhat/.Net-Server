@@ -271,7 +271,7 @@ namespace SHOPAPI.Controllers
                     orderId = id
                 });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // Log exception ở đây
                 return InternalServerError(new Exception("Có lỗi xảy ra khi cập nhật đơn hàng."));
