@@ -7,13 +7,13 @@ namespace API.Migrations
     using System.Resources;
     
     [GeneratedCode("EntityFramework.Migrations", "6.5.1")]
-    public sealed partial class InitialCreate : IMigrationMetadata
+    public sealed partial class ShopDB : IMigrationMetadata
     {
-        private readonly ResourceManager Resources = new ResourceManager(typeof(InitialCreate));
+        private readonly ResourceManager Resources = new ResourceManager(typeof(ShopDB));
         
         string IMigrationMetadata.Id
         {
-            get { return "202505281340002_InitialCreate"; }
+            get { return "202506061526290_ShopDB"; }
         }
         
         string IMigrationMetadata.Source

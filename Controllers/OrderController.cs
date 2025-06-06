@@ -372,13 +372,7 @@ namespace SHOPAPI.Controllers
 
                 if (!orders.Any())
                 {
-                    return Ok(new
-                    {
-                        Message = "Không tìm thấy đơn hàng nào với số điện thoại và ngày đã chọn.",
-                        PhoneNumber = dto.PhoneNumber,
-                        OrderDate = targetDate.ToString("dd/MM/yyyy"),
-                        OrderCount = 0
-                    });
+                    return BadRequest("Không có đơn hàng nào được tìm thấy!");
                 }
 
                 // Tạo PDF báo cáo

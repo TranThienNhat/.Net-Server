@@ -36,6 +36,18 @@
                 context.admins.Add(admin);
                 context.SaveChanges();
             }
+
+            if (!context.Categories.Any())
+            {
+                context.Categories.AddOrUpdate(
+                    c => c.Name,
+                    new Category { Name = "Bàn" },
+                    new Category { Name = "Ghế" },
+                    new Category { Name = "Tủ" },
+                    new Category { Name = "Trang trí" }
+                );
+                context.SaveChanges();
+            }
         }
     }
 }

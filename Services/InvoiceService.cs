@@ -134,21 +134,21 @@ namespace API.Services
 
             return $@"Chào {customerName},
 
-    Cảm ơn bạn đã tin tưởng và mua sắm tại Simple House!
+            Cảm ơn bạn đã tin tưởng và mua sắm tại Simple House!
 
-    Đây là báo cáo tổng hợp cho {orders.Count} đơn hàng của bạn:
-    - Mã đơn hàng: #{orderIds}
-    - Tổng giá trị: {totalAmount:N0} VNĐ
-    - Ngày tạo báo cáo: {DateTime.Now:dd/MM/yyyy HH:mm}
+            Đây là báo cáo tổng hợp cho {orders.Count} đơn hàng của bạn:
+            - Mã đơn hàng: #{orderIds}
+            - Tổng giá trị: {totalAmount:N0} VNĐ
+            - Ngày tạo báo cáo: {DateTime.Now:dd/MM/yyyy HH:mm}
 
-    Vui lòng xem chi tiết trong file PDF đính kèm.
+            Vui lòng xem chi tiết trong file PDF đính kèm.
 
-    Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ:
-    - Hotline: 0123-456-789
-    - Email: simplehouse123@gmail.com
+            Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ:
+            - Hotline: 0123-456-789
+            - Email: simplehouse123@gmail.com
 
-    Trân trọng,
-    Simple House Team";
+            Trân trọng,
+            Simple House Team";
         }
 
         // Phương thức tạo PDF tổng hợp cho nhiều đơn hàng
@@ -188,7 +188,7 @@ namespace API.Services
                 PdfPCell invoiceInfoCell = new PdfPCell();
                 invoiceInfoCell.Border = Rectangle.NO_BORDER;
                 invoiceInfoCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-                invoiceInfoCell.AddElement(new Paragraph("BÁO CÁO ĐỚN HÀNG", headerFont));
+                invoiceInfoCell.AddElement(new Paragraph("BÁO CÁO ĐƠN HÀNG", headerFont));
                 invoiceInfoCell.AddElement(new Paragraph($"Ngày: {DateTime.Now:dd/MM/yyyy}", normalFont));
                 invoiceInfoCell.AddElement(new Paragraph($"Giờ: {DateTime.Now:HH:mm}", normalFont));
                 invoiceInfoCell.AddElement(new Paragraph($"Tổng số đơn: {orders.Count}", normalFont));
@@ -214,7 +214,7 @@ namespace API.Services
                 if (!string.IsNullOrEmpty(firstOrder.Name))
                     leftCustomerCell.AddElement(new Paragraph($"Họ tên: {firstOrder.Name}", normalFont));
                 if (!string.IsNullOrEmpty(firstOrder.PhoneNumber))
-                    leftCustomerCell.AddElement(new Paragraph($"Điện thoại: {firstOrder.PhoneNumber}", normalFont));
+                    leftCustomerCell.AddElement(new Paragraph($"Số điện thoại: {firstOrder.PhoneNumber}", normalFont));
                 if (!string.IsNullOrEmpty(firstOrder.Email))
                     leftCustomerCell.AddElement(new Paragraph($"Email: {firstOrder.Email}", normalFont));
                 customerTable.AddCell(leftCustomerCell);

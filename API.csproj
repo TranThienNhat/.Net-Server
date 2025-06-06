@@ -213,9 +213,9 @@
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
-    <Compile Include="Migrations\202505281340002_InitialCreate.cs" />
-    <Compile Include="Migrations\202505281340002_InitialCreate.Designer.cs">
-      <DependentUpon>202505281340002_InitialCreate.cs</DependentUpon>
+    <Compile Include="Migrations\202506061526290_ShopDB.cs" />
+    <Compile Include="Migrations\202506061526290_ShopDB.Designer.cs">
+      <DependentUpon>202506061526290_ShopDB.cs</DependentUpon>
     </Compile>
     <Compile Include="Migrations\Configuration.cs" />
     <Compile Include="Models\Admin.cs" />
@@ -244,8 +244,8 @@
     <Folder Include="Uploads\" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Migrations\202505281340002_InitialCreate.resx">
-      <DependentUpon>202505281340002_InitialCreate.cs</DependentUpon>
+    <EmbeddedResource Include="Migrations\202506061526290_ShopDB.resx">
+      <DependentUpon>202506061526290_ShopDB.cs</DependentUpon>
     </EmbeddedResource>
   </ItemGroup>
   <PropertyGroup>
