@@ -77,38 +77,28 @@ namespace SHOPAPI.Controllers
                 Username = dto.Username,
                 PasswordHash = passwordHash,
                 Email = dto.Email,
-                Role = Role.USER
+                Role = Role.USER,
+                Name = dto.Name,
+                PhoneNumber = dto.PhoneNumber,
+                Address = dto.Address
             };
 
             db.Users.Add(newUser);
             db.SaveChanges();
 
-            var cart = new Cart
-            {
-                UserId = newUser.Id
-            };
-
-            db.Carts.Add(cart);
+            db.Carts.Add(new Cart { UserId = newUser.Id });
             db.SaveChanges();
 
             return Ok(new
             {
-                message = "Đăng ký thành công và đã tạo giỏ hàng",
-                user = new
-                {
-                    newUser.Id,
-                    newUser.Username,
-                    newUser.Email,
-                    cartId = cart.Id
-                }
+                message = "Đăng ký thành công và đã thêm thông tin người dùng."
             });
         }
 
-
         [Authorize(Roles = "USER")]
-        [HttpPost]
+        [HttpGet]
         [Route("user/info")]
-        public IHttpActionResult AddInfo(UserInfoDto dto)
+        public IHttpActionResult GetUserInfo()
         {
             var identity = (ClaimsIdentity)User.Identity;
             var userIdClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
@@ -118,15 +108,14 @@ namespace SHOPAPI.Controllers
             var user = db.Users.Find(userId);
             if (user == null) return NotFound();
 
-            user.Name = dto.Name;
-            user.PhoneNumber = dto.PhoneNumber;
-            user.Address = dto.Address;
-            db.SaveChanges();
-
             return Ok(new
             {
-                message = "Thêm thông tin thành công",
-                user = new { user.Id, user.Username, user.PhoneNumber, user.Address }
+                user.Id,
+                user.Username,
+                user.Name,
+                user.Email,
+                user.PhoneNumber,
+                user.Address
             });
         }
 
@@ -140,10 +129,8 @@ namespace SHOPAPI.Controllers
             if (userIdClaim == null) return Unauthorized();
 
             int userId = Convert.ToInt32(userIdClaim.Value);
-
             var user = db.Users.Find(userId);
-            if (user == null)
-                return NotFound();
+            if (user == null) return NotFound();
 
             user.Name = dto.Name;
             user.PhoneNumber = dto.PhoneNumber;
@@ -153,10 +140,9 @@ namespace SHOPAPI.Controllers
 
             return Ok(new
             {
-                message = "Cập nhật thông tin thành công",
-                user = new { user.Id, user.Username, user.PhoneNumber, user.Address }
+                message = "Thông tin đã được cập nhật",
+                user = new { user.Id, user.Name, user.PhoneNumber, user.Address }
             });
         }
-
     }
 }

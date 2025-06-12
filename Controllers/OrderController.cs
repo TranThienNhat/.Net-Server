@@ -1,5 +1,6 @@
 ﻿using API.DTOs.Cart;
 using API.DTOs.Order;
+using API.Models;
 using API.Services;
 using SHOPAPI.Data;
 using SHOPAPI.DTOs.Order;
@@ -27,81 +28,100 @@ namespace SHOPAPI.Controllers
         [Authorize(Roles = "ADMIN")]
         [HttpGet]
         [Route("api/orders/admin")]
-        public IHttpActionResult GetAllOrders()
+        public async Task<IHttpActionResult> GetAllOrders()
         {
-            var orders = db.Orders
-                .AsNoTracking()
-                .Include("User")
-                .Include("OrderItems.Product")
-                .Select(o => new OrderReadDto
-                {
-                    Id = o.Id,
-                    Name = o.User.Name,
-                    PhoneNumber = o.User.PhoneNumber,
-                    Email = o.User.Email,
-                    Address = o.User.Address,
-                    Note = o.Note,
-                    OrderDate = o.OrderDate,
-                    TotalPrice = o.TotalPrice,
-                    OrderStatus = o.OrderStatus.ToString(),
-                    OrderItems = o.OrderItems.Select(oi => new OrderItemReadDto
+            try
+            {
+                var orders = await db.Orders
+                    .AsNoTracking()
+                    .Include(o => o.User)
+                    .Include(o => o.OrderItems.Select(oi => oi.Product))
+                    .Select(o => new OrderReadDto
                     {
-                        ProductId = oi.ProductId,
-                        ProductName = oi.Product.Name,
-                        Quantity = oi.Quantity,
-                        PriceAtPurchase = oi.PriceAtPurchase
-                    }).ToList()
-                }).ToList();
+                        Id = o.Id,
+                        Name = o.User.Name,
+                        PhoneNumber = o.User.PhoneNumber,
+                        Email = o.User.Email,
+                        Address = o.User.Address,
+                        Note = o.Note,
+                        OrderDate = o.OrderDate,
+                        TotalPrice = o.TotalPrice,
+                        OrderStatus = o.OrderStatus.ToString(),
+                        OrderItems = o.OrderItems.Select(oi => new OrderItemReadDto
+                        {
+                            ProductId = oi.ProductId,
+                            ProductName = oi.Product.Name,
+                            Quantity = oi.Quantity,
+                            PriceAtPurchase = oi.PriceAtPurchase
+                        }).ToList()
+                    })
+                    .OrderByDescending(o => o.OrderDate)
+                    .ToListAsync();
 
-            return Ok(orders);
+                return Ok(orders);
+            }
+            catch (Exception ex)
+            {
+                return InternalServerError(ex);
+            }
         }
 
         [Authorize(Roles = "USER")]
         [HttpGet]
         [Route("api/orders/my")]
-        public IHttpActionResult GetMyOrders()
+        public async Task<IHttpActionResult> GetMyOrders()
         {
-            var identity = (ClaimsIdentity)User.Identity;
-            var userIdClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null)
-                return Unauthorized();
+            try
+            {
+                var identity = (ClaimsIdentity)User.Identity;
+                var userIdClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null)
+                    return Unauthorized();
 
-            int userId = Convert.ToInt32(userIdClaim.Value);
+                if (!int.TryParse(userIdClaim.Value, out int userId))
+                    return Unauthorized();
 
-            var orders = db.Orders
-                .AsNoTracking()
-                .Include("OrderItems.Product")
-                .Where(o => o.UserId == userId)
-                .Select(o => new OrderReadDto
-                {
-                    Id = o.Id,
-                    Name = o.User.Name,
-                    PhoneNumber = o.User.PhoneNumber,
-                    Email = o.User.Email,
-                    Address = o.User.Address,
-                    Note = o.Note,
-                    OrderDate = o.OrderDate,
-                    TotalPrice = o.TotalPrice,
-                    OrderStatus = o.OrderStatus.ToString(),
-                    OrderItems = o.OrderItems.Select(oi => new OrderItemReadDto
+                var orders = await db.Orders
+                    .AsNoTracking()
+                    .Include(o => o.User)
+                    .Include(o => o.OrderItems.Select(oi => oi.Product))
+                    .Where(o => o.UserId == userId)
+                    .Select(o => new OrderReadDto
                     {
-                        ProductId = oi.ProductId,
-                        ProductName = oi.Product.Name,
-                        Quantity = oi.Quantity,
-                        PriceAtPurchase = oi.PriceAtPurchase
-                    }).ToList()
-                }).ToList();
+                        Id = o.Id,
+                        Name = o.User.Name,
+                        PhoneNumber = o.User.PhoneNumber,
+                        Email = o.User.Email,
+                        Address = o.User.Address,
+                        Note = o.Note,
+                        OrderDate = o.OrderDate,
+                        TotalPrice = o.TotalPrice,
+                        OrderStatus = o.OrderStatus.ToString(),
+                        OrderItems = o.OrderItems.Select(oi => new OrderItemReadDto
+                        {
+                            ProductId = oi.ProductId,
+                            ProductName = oi.Product.Name,
+                            Quantity = oi.Quantity,
+                            PriceAtPurchase = oi.PriceAtPurchase
+                        }).ToList()
+                    })
+                    .OrderByDescending(o => o.OrderDate)
+                    .ToListAsync();
 
-            return Ok(orders);
+                return Ok(orders);
+            }
+            catch (Exception ex)
+            {
+                return InternalServerError(ex);
+            }
         }
-
 
         [Authorize(Roles = "USER, ADMIN")]
         [HttpPost]
         [Route("api/orders/create")]
-        public async Task<IHttpActionResult> CreateOrder(OrderCreateDto dto)
+        public async Task<IHttpActionResult> CreateOrder(OrderItemDto dto)
         {
-            if (dto == null || dto.Items == null || !dto.Items.Any())
+            if (dto == null || dto.ProductId <= 0 || dto.Quantity <= 0)
                 return BadRequest("Dữ liệu đơn hàng không hợp lệ.");
 
             var identity = (ClaimsIdentity)User.Identity;
@@ -109,67 +129,98 @@ namespace SHOPAPI.Controllers
             if (userIdClaim == null)
                 return Unauthorized();
 
-            int userId = Convert.ToInt32(userIdClaim.Value);
+            if (!int.TryParse(userIdClaim.Value, out int userId))
+                return Unauthorized();
 
             using (var transaction = db.Database.BeginTransaction())
             {
                 try
                 {
-                    var productIds = dto.Items.Select(i => i.ProductId).ToList();
-                    var products = await db.Products
-                        .Where(p => productIds.Contains(p.Id))
-                        .ToDictionaryAsync(p => p.Id, p => p);
+                    // Lấy user để đảm bảo tồn tại
+                    var user = await db.Users.FindAsync(userId);
+                    if (user == null)
+                        return BadRequest("Người dùng không tồn tại.");
 
-                    foreach (var itemDto in dto.Items)
+                    // Lấy thông tin sản phẩm
+                    var product = await db.Products.FindAsync(dto.ProductId);
+                    if (product == null)
+                        return BadRequest($"Sản phẩm với ID {dto.ProductId} không tồn tại.");
+
+                    if (product.Quantity < dto.Quantity)
+                        return BadRequest($"Sản phẩm {product.Name} không đủ hàng (còn {product.Quantity}, cần {dto.Quantity}).");
+
+                    CartItem cartItemToRemove = null;
+
+                    // Kiểm tra cart item nếu có
+                    if (dto.CartItemId.HasValue)
                     {
-                        if (!products.ContainsKey(itemDto.ProductId))
-                            return BadRequest($"Sản phẩm có ID {itemDto.ProductId} không tồn tại.");
+                        cartItemToRemove = await db.CartItems
+                            .Include(ci => ci.Cart)
+                            .FirstOrDefaultAsync(ci => ci.Id == dto.CartItemId.Value && ci.Cart.UserId == userId);
 
-                        var product = products[itemDto.ProductId];
-                        if (product.Quantity < itemDto.Quantity)
-                            return BadRequest($"Sản phẩm {product.Name} không đủ hàng.");
+                        if (cartItemToRemove == null)
+                            return BadRequest($"Cart item với ID {dto.CartItemId.Value} không tồn tại hoặc không thuộc về bạn.");
+
+                        if (cartItemToRemove.ProductId != dto.ProductId)
+                            return BadRequest("ProductId không khớp với cart item.");
                     }
 
-                    var orderItems = new List<OrderItem>();
-                    long totalPrice = 0;
-
-                    foreach (var itemDto in dto.Items)
+                    // Cập nhật số lượng sản phẩm
+                    product.Quantity -= dto.Quantity;
+                    if (product.Quantity <= 0)
                     {
-                        var product = products[itemDto.ProductId];
-                        product.Quantity -= itemDto.Quantity;
-                        if (product.Quantity == 0)
-                            product.IsOutOfStock = true;
-
-                        orderItems.Add(new OrderItem
-                        {
-                            ProductId = product.Id,
-                            Quantity = itemDto.Quantity,
-                            PriceAtPurchase = product.Price,
-                            Product = product
-                        });
-
-                        totalPrice += product.Price * itemDto.Quantity;
+                        product.Quantity = 0;
+                        product.IsOutOfStock = true;
                     }
 
+                    // Tạo đơn hàng
                     var order = new Order
                     {
                         UserId = userId,
-                        Note = dto.Note,
+                        Note = dto.Note ?? string.Empty,
                         OrderDate = DateTime.Now,
-                        TotalPrice = totalPrice,
-                        OrderStatus = OrderStatus.DangXuLy,
-                        OrderItems = orderItems
+                        TotalPrice = product.Price * dto.Quantity,
+                        OrderStatus = OrderStatus.DangXuLy
                     };
 
                     db.Orders.Add(order);
-                    db.SaveChanges();
+                    await db.SaveChangesAsync();
+
+                    // Tạo order item
+                    var orderItem = new OrderItem
+                    {
+                        OrderId = order.Id,
+                        ProductId = product.Id,
+                        Quantity = dto.Quantity,
+                        PriceAtPurchase = product.Price
+                    };
+
+                    db.OrderItems.Add(orderItem);
+
+                    // Xóa cart item nếu có
+                    if (cartItemToRemove != null)
+                    {
+                        db.CartItems.Remove(cartItemToRemove);
+                    }
+
+                    await db.SaveChangesAsync();
                     transaction.Commit();
 
+                    // Gửi email xác nhận (fire-and-forget)
                     _ = Task.Run(async () =>
                     {
                         try
                         {
-                            await emailService.SendOrderConfirmationEmailAsync(order);
+                            // Load lại order với đầy đủ thông tin để gửi email
+                            var orderForEmail = await db.Orders
+                                .Include(o => o.User)
+                                .Include(o => o.OrderItems.Select(oi => oi.Product))
+                                .FirstOrDefaultAsync(o => o.Id == order.Id);
+
+                            if (orderForEmail != null)
+                            {
+                                await emailService.SendOrderConfirmationEmailAsync(orderForEmail);
+                            }
                         }
                         catch (Exception exEmail)
                         {
@@ -180,7 +231,9 @@ namespace SHOPAPI.Controllers
                     return Ok(new
                     {
                         Message = "Tạo đơn hàng thành công.",
-                        OrderId = order.Id
+                        OrderId = order.Id,
+                        TotalPrice = order.TotalPrice,
+                        ItemCount = 1
                     });
                 }
                 catch (Exception ex)
@@ -190,104 +243,6 @@ namespace SHOPAPI.Controllers
                 }
             }
         }
-
-        [Authorize(Roles = "USER")]
-        [HttpPost]
-        [Route("api/orders/create-from-cart")]
-        public async Task<IHttpActionResult> CreateOrderFromCart(OrderFromCartDto dto)
-        {
-            if (dto == null || dto.CartItemIds == null || !dto.CartItemIds.Any())
-                return BadRequest("Dữ liệu đơn hàng không hợp lệ.");
-
-            var identity = (ClaimsIdentity)User.Identity;
-            var userIdClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null)
-                return Unauthorized();
-
-            int userId = Convert.ToInt32(userIdClaim.Value);
-
-            using (var transaction = db.Database.BeginTransaction())
-            {
-                try
-                {
-                    var cartItems = db.CartItems
-                        .Include("Product")
-                        .Include("Cart")
-                        .Where(ci => dto.CartItemIds.Contains(ci.Id) && ci.Cart.UserId == userId)
-                        .ToList();
-
-                    if (!cartItems.Any())
-                        return BadRequest("Không tìm thấy cart item hợp lệ.");
-
-                    var orders = new List<Order>();
-
-                    // Không cần GroupBy — gom tất cả cartItems thành 1 đơn duy nhất
-                    var orderItems = new List<OrderItem>();
-                    long totalPrice = 0;
-
-                    foreach (var item in cartItems)
-                    {
-                        var product = item.Product;
-
-                        if (product.Quantity < item.Quantity)
-                            return BadRequest($"Sản phẩm {product.Name} không đủ hàng.");
-
-                        product.Quantity -= item.Quantity;
-                        if (product.Quantity == 0)
-                            product.IsOutOfStock = true;
-
-                        orderItems.Add(new OrderItem
-                        {
-                            ProductId = product.Id,
-                            Quantity = item.Quantity,
-                            PriceAtPurchase = product.Price
-                        });
-
-                        totalPrice += product.Price * item.Quantity;
-                    }
-
-                    var order = new Order
-                    {
-                        UserId = userId,
-                        OrderDate = DateTime.Now,
-                        TotalPrice = totalPrice,
-                        OrderStatus = OrderStatus.DangXuLy,
-                        OrderItems = orderItems
-                    };
-
-                    db.Orders.Add(order);
-                    db.CartItems.RemoveRange(cartItems);
-                    await db.SaveChangesAsync();
-                    transaction.Commit();
-
-
-                    // Gửi email xác nhận nhiều đơn
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await invoiceService.SendMultiInvoiceEmailAsync(orders);
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Lỗi gửi email: {ex.Message}");
-                        }
-                    });
-
-                    return Ok(new
-                    {
-                        message = $"Tạo đơn hàng thành công.",
-                        orderIds = order.Id
-                    });
-                }
-                catch (Exception ex)
-                {
-                    transaction.Rollback();
-                    return InternalServerError(ex);
-                }
-            }
-        }
-
 
         [Authorize(Roles = "ADMIN")]
         [HttpPut]
@@ -351,15 +306,16 @@ namespace SHOPAPI.Controllers
         [Route("api/orders/{id}/sendinvoice")]
         public async Task<IHttpActionResult> SendInvoicePdf(int id)
         {
-            var order = await db.Orders
-                .Include(o => o.OrderItems.Select(oi => oi.Product))
-                .FirstOrDefaultAsync(o => o.Id == id);
-
-            if (order == null)
-                return NotFound();
-
             try
             {
+                var order = await db.Orders
+                    .Include(o => o.User)
+                    .Include(o => o.OrderItems.Select(oi => oi.Product))
+                    .FirstOrDefaultAsync(o => o.Id == id);
+
+                if (order == null)
+                    return NotFound();
+
                 await invoiceService.SendInvoiceEmailAsync(order);
 
                 return Ok(new
@@ -379,15 +335,16 @@ namespace SHOPAPI.Controllers
         [Route("api/orders/{id}/invoicepdf")]
         public async Task<HttpResponseMessage> GetInvoicePdf(int id)
         {
-            var order = await db.Orders
-                .Include(o => o.OrderItems.Select(oi => oi.Product))
-                .FirstOrDefaultAsync(o => o.Id == id);
-
-            if (order == null)
-                return Request.CreateResponse(HttpStatusCode.NotFound, "Không tìm thấy đơn hàng.");
-
             try
             {
+                var order = await db.Orders
+                    .Include(o => o.User)
+                    .Include(o => o.OrderItems.Select(oi => oi.Product))
+                    .FirstOrDefaultAsync(o => o.Id == id);
+
+                if (order == null)
+                    return Request.CreateResponse(HttpStatusCode.NotFound, "Không tìm thấy đơn hàng.");
+
                 // Tạo PDF
                 var pdfBytes = invoiceService.GenerateInvoicePdf(order);
 
@@ -428,13 +385,13 @@ namespace SHOPAPI.Controllers
 
                 // Tìm các đơn hàng theo số điện thoại và ngày
                 var orders = await db.Orders
+                    .Include(o => o.User)
                     .Include(o => o.OrderItems.Select(oi => oi.Product))
                     .Where(o => o.User.PhoneNumber == dto.PhoneNumber.Trim() &&
                                DbFunctions.TruncateTime(o.OrderDate) == targetDate.Date &&
-                               o.OrderStatus == OrderStatus.DaGiao) // Thêm điều kiện trạng thái đơn hàng
+                               o.OrderStatus == OrderStatus.DaGiao)
                     .OrderBy(o => o.OrderDate)
                     .ToListAsync();
-
 
                 if (!orders.Any())
                 {
@@ -485,20 +442,6 @@ namespace SHOPAPI.Controllers
             {
                 System.Diagnostics.Debug.WriteLine($"Lỗi tạo báo cáo đơn hàng: {ex.Message}");
                 return InternalServerError(new Exception("Có lỗi xảy ra khi tạo báo cáo đơn hàng."));
-            }
-        }
-
-        // Helper method để kiểm tra email hợp lệ
-        private bool IsValidEmail(string email)
-        {
-            try
-            {
-                var addr = new System.Net.Mail.MailAddress(email);
-                return addr.Address == email;
-            }
-            catch
-            {
-                return false;
             }
         }
     }

@@ -123,30 +123,5 @@ namespace API.Controllers
 
             return Ok(new { message = "Đã xóa sản phẩm khỏi giỏ hàng." });
         }
-
-        [Authorize(Roles = "USER")]
-        [HttpDelete]
-        [Route("api/cart/clear")]
-        public IHttpActionResult ClearCart()
-        {
-            var identity = (ClaimsIdentity)User.Identity;
-            var userIdClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null)
-                return Unauthorized();
-
-            int userId = Convert.ToInt32(userIdClaim.Value);
-
-            var cart = db.Carts.FirstOrDefault(c => c.UserId == userId);
-            if (cart == null) return NotFound();
-
-            var cartItems = db.CartItems.Where(ci => ci.CartId == cart.Id).ToList();
-            if (!cartItems.Any())
-                return Ok(new { message = "Giỏ hàng đã trống." });
-
-            db.CartItems.RemoveRange(cartItems);
-            db.SaveChanges();
-
-            return Ok(new { message = "Đã xóa toàn bộ giỏ hàng." });
-        }
     }
 }

@@ -46,11 +46,6 @@
                 };
 
                 context.Users.Add(admin);
-
-                context.Carts.Add(new Cart
-                {
-                    User = admin
-                });
             }
             context.SaveChanges();
         }
