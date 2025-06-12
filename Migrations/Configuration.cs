@@ -1,5 +1,6 @@
 ﻿namespace API.Migrations
 {
+    using API.Models;
     using Microsoft.AspNet.Identity;
     using SHOPAPI.Models;
     using SHOPAPI.Models.Enum;
@@ -21,22 +22,6 @@
 
             //  You can use the DbSet<T>.AddOrUpdate() helper extension method
             //  to avoid creating duplicate seed data.
-            if (!context.admins.Any())
-            {
-                var hasher = new PasswordHasher();
-                var hashedPassword = hasher.HashPassword("123456");
-
-                var admin = new Admin
-                {
-                    Username = "admin",
-                    PasswordHash = hashedPassword,
-                    Role = Role.ADMIN
-                };
-
-                context.admins.Add(admin);
-                context.SaveChanges();
-            }
-
             if (!context.Categories.Any())
             {
                 context.Categories.AddOrUpdate(
@@ -46,8 +31,28 @@
                     new Category { Name = "Tủ" },
                     new Category { Name = "Trang trí" }
                 );
-                context.SaveChanges();
+                
             }
+
+            if (!context.Users.Any(u => u.Username == "admin"))
+            {
+                var hasher = new PasswordHasher();
+                var admin = new Users
+                {
+                    Username = "admin",
+                    PasswordHash = hasher.HashPassword("admin"),
+                    Role = Role.ADMIN,
+                    Name = "Quản trị viên",
+                };
+
+                context.Users.Add(admin);
+
+                context.Carts.Add(new Cart
+                {
+                    User = admin
+                });
+            }
+            context.SaveChanges();
         }
     }
 }

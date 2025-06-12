@@ -43,7 +43,7 @@ namespace SHOPAPI.Services
                         IsBodyHtml = true
                     };
 
-                    mailMessage.To.Add(order.Email);
+                    mailMessage.To.Add(order.User.Email);
 
                     await client.SendMailAsync(mailMessage);
                 }
@@ -364,7 +364,7 @@ namespace SHOPAPI.Services
             
             <div class=""content"">
                 <div class=""greeting"">
-                    Xin chào <strong>{order.Name}</strong>,<br>
+                    Xin chào <strong>{order.User.Name}</strong>,<br>
                     Cảm ơn bạn đã tin tưởng và đặt hàng tại cửa hàng chúng tôi! 🎉
                 </div>
                 
@@ -377,11 +377,11 @@ namespace SHOPAPI.Services
                         </div>
                         <div class=""info-item"">
                             <div class=""info-label"">Số điện thoại</div>
-                            <div class=""info-value"">{order.PhoneNumber}</div>
+                            <div class=""info-value"">{order.User.PhoneNumber}</div>
                         </div>
                         <div class=""info-item full-width"">
                             <div class=""info-label"">Địa chỉ giao hàng</div>
-                            <div class=""info-value"">{order.Address}</div>
+                            <div class=""info-value"">{order.User.Address}</div>
                         </div>
                         {(string.IsNullOrEmpty(order.Note) ? "" : $@"
                         <div class=""info-item full-width"">

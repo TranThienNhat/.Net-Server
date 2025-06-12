@@ -45,11 +45,11 @@ namespace API.Services
                     {
                         From = new MailAddress(_fromEmail),
                         Subject = $"Hóa đơn cho đơn hàng #{order.Id}",
-                        Body = $"Chào {order.Name},\n\nCảm ơn bạn đã đặt hàng. Vui lòng xem hóa đơn đính kèm.\n\nTrân trọng.",
+                        Body = $"Chào {order.User.Name},\n\nCảm ơn bạn đã đặt hàng. Vui lòng xem hóa đơn đính kèm.\n\nTrân trọng.",
                         IsBodyHtml = false
                     };
 
-                    mailMessage.To.Add(order.Email);
+                    mailMessage.To.Add(order.User.Email);
 
                     // Generate PDF
                     var pdfBytes = GenerateInvoicePdf(order);
@@ -78,8 +78,8 @@ namespace API.Services
 
                 // Lấy thông tin người nhận từ đơn hàng đầu tiên (vì tất cả đơn hàng thuộc về cùng 1 người)
                 var firstOrder = orders.First();
-                var customerEmail = firstOrder.Email;
-                var customerName = firstOrder.Name;
+                var customerEmail = firstOrder.User.Email;
+                var customerName = firstOrder.User.Name;
 
                 // Kiểm tra email hợp lệ
                 if (string.IsNullOrEmpty(customerEmail))
@@ -188,7 +188,7 @@ namespace API.Services
                 PdfPCell invoiceInfoCell = new PdfPCell();
                 invoiceInfoCell.Border = Rectangle.NO_BORDER;
                 invoiceInfoCell.HorizontalAlignment = Element.ALIGN_RIGHT;
-                invoiceInfoCell.AddElement(new Paragraph("BÁO CÁO ĐƠN HÀNG", headerFont));
+                invoiceInfoCell.AddElement(new Paragraph("HÓA ĐƠN BÁN HÀNG", headerFont));
                 invoiceInfoCell.AddElement(new Paragraph($"Ngày: {DateTime.Now:dd/MM/yyyy}", normalFont));
                 invoiceInfoCell.AddElement(new Paragraph($"Giờ: {DateTime.Now:HH:mm}", normalFont));
                 invoiceInfoCell.AddElement(new Paragraph($"Tổng số đơn: {orders.Count}", normalFont));
@@ -211,20 +211,20 @@ namespace API.Services
                 PdfPCell leftCustomerCell = new PdfPCell();
                 leftCustomerCell.Border = Rectangle.NO_BORDER;
                 leftCustomerCell.Padding = 5;
-                if (!string.IsNullOrEmpty(firstOrder.Name))
-                    leftCustomerCell.AddElement(new Paragraph($"Họ tên: {firstOrder.Name}", normalFont));
-                if (!string.IsNullOrEmpty(firstOrder.PhoneNumber))
-                    leftCustomerCell.AddElement(new Paragraph($"Số điện thoại: {firstOrder.PhoneNumber}", normalFont));
-                if (!string.IsNullOrEmpty(firstOrder.Email))
-                    leftCustomerCell.AddElement(new Paragraph($"Email: {firstOrder.Email}", normalFont));
+                if (!string.IsNullOrEmpty(firstOrder.User.Name))
+                    leftCustomerCell.AddElement(new Paragraph($"Họ tên: {firstOrder.User.Name}", normalFont));
+                if (!string.IsNullOrEmpty(firstOrder.User.PhoneNumber))
+                    leftCustomerCell.AddElement(new Paragraph($"Số điện thoại: {firstOrder.User.PhoneNumber}", normalFont));
+                if (!string.IsNullOrEmpty(firstOrder.User.Email))
+                    leftCustomerCell.AddElement(new Paragraph($"Email: {firstOrder.User.Email}", normalFont));
                 customerTable.AddCell(leftCustomerCell);
 
                 // Right column  
                 PdfPCell rightCustomerCell = new PdfPCell();
                 rightCustomerCell.Border = Rectangle.NO_BORDER;
                 rightCustomerCell.Padding = 5;
-                if (!string.IsNullOrEmpty(firstOrder.Address))
-                    rightCustomerCell.AddElement(new Paragraph($"Địa chỉ: {firstOrder.Address}", normalFont));
+                if (!string.IsNullOrEmpty(firstOrder.User.Address))
+                    rightCustomerCell.AddElement(new Paragraph($"Địa chỉ: {firstOrder.User.Address}", normalFont));
 
                 // Gộp ghi chú từ tất cả đơn hàng (nếu có)
                 var allNotes = orders.Where(o => !string.IsNullOrEmpty(o.Note)).Select(o => o.Note).Distinct();
@@ -369,9 +369,9 @@ namespace API.Services
                 customerSignatureCell.AddElement(new Paragraph(" ")); // Space for signature
                 customerSignatureCell.AddElement(new Paragraph(" ")); // Space for signature
                 customerSignatureCell.AddElement(new Paragraph(" ")); // Space for signature
-                if (!string.IsNullOrEmpty(orders.First().Name))
+                if (!string.IsNullOrEmpty(orders.First().User.Name))
                 {
-                    customerSignatureCell.AddElement(new Paragraph(orders.First().Name, normalFont));
+                    customerSignatureCell.AddElement(new Paragraph(orders.First().User.Name, normalFont));
                 }
                 signatureTable.AddCell(customerSignatureCell);
 
@@ -466,20 +466,20 @@ namespace API.Services
                 PdfPCell leftCustomerCell = new PdfPCell();
                 leftCustomerCell.Border = Rectangle.NO_BORDER;
                 leftCustomerCell.Padding = 5;
-                if (!string.IsNullOrEmpty(order.Name))
-                    leftCustomerCell.AddElement(new Paragraph($"Họ tên: {order.Name}", normalFont));
-                if (!string.IsNullOrEmpty(order.PhoneNumber))
-                    leftCustomerCell.AddElement(new Paragraph($"Điện thoại: {order.PhoneNumber}", normalFont));
-                if (!string.IsNullOrEmpty(order.Email))
-                    leftCustomerCell.AddElement(new Paragraph($"Email: {order.Email}", normalFont));
+                if (!string.IsNullOrEmpty(order.User.Name))
+                    leftCustomerCell.AddElement(new Paragraph($"Họ tên: {order.User.Name}", normalFont));
+                if (!string.IsNullOrEmpty(order.User.PhoneNumber))
+                    leftCustomerCell.AddElement(new Paragraph($"Điện thoại: {order.User.PhoneNumber}", normalFont));
+                if (!string.IsNullOrEmpty(order.User.Email))
+                    leftCustomerCell.AddElement(new Paragraph($"Email: {order.User.Email}", normalFont));
                 customerTable.AddCell(leftCustomerCell);
 
                 // Right column  
                 PdfPCell rightCustomerCell = new PdfPCell();
                 rightCustomerCell.Border = Rectangle.NO_BORDER;
                 rightCustomerCell.Padding = 5;
-                if (!string.IsNullOrEmpty(order.Address))
-                    rightCustomerCell.AddElement(new Paragraph($"Địa chỉ: {order.Address}", normalFont));
+                if (!string.IsNullOrEmpty(order.User.Address))
+                    rightCustomerCell.AddElement(new Paragraph($"Địa chỉ: {order.User.Address}", normalFont));
                 if (!string.IsNullOrEmpty(order.Note))
                     rightCustomerCell.AddElement(new Paragraph($"Ghi chú: {order.Note}", normalFont));
                 customerTable.AddCell(rightCustomerCell);

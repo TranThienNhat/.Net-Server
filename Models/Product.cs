@@ -1,4 +1,5 @@
-﻿using System;
+﻿using API.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web;
@@ -15,6 +16,7 @@ namespace SHOPAPI.Models
         public string ImageUrl { get; set; }
         public bool IsOutOfStock { get; set; }
         public virtual ICollection<Category> Categories { get; set; }
-        public virtual ICollection<OrderItem> Items { get; set; }
+        public virtual ICollection<OrderItem> OrderItems { get; set; }
+        public virtual ICollection<CartItem> CartItems { get; set; }
     }
 }

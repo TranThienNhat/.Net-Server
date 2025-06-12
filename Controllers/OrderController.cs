@@ -1,4 +1,5 @@
-﻿using API.DTOs.Order;
+﻿using API.DTOs.Cart;
+using API.DTOs.Order;
 using API.Services;
 using SHOPAPI.Data;
 using SHOPAPI.DTOs.Order;
@@ -11,6 +12,7 @@ using System.Data.Entity;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using System.Web.Http;
 
@@ -24,71 +26,77 @@ namespace SHOPAPI.Controllers
 
         [Authorize(Roles = "ADMIN")]
         [HttpGet]
-        [Route("api/orders")]
-        public IHttpActionResult GetOrder()
+        [Route("api/orders/admin")]
+        public IHttpActionResult GetAllOrders()
         {
             var orders = db.Orders
                 .AsNoTracking()
-                .Include(o => o.OrderItems.Select(oi => oi.Product))
+                .Include("User")
+                .Include("OrderItems.Product")
                 .Select(o => new OrderReadDto
                 {
                     Id = o.Id,
-                    Name = o.Name,
-                    PhoneNumber = o.PhoneNumber,
-                    Email = o.Email,
-                    Address = o.Address,
+                    Name = o.User.Name,
+                    PhoneNumber = o.User.PhoneNumber,
+                    Email = o.User.Email,
+                    Address = o.User.Address,
                     Note = o.Note,
                     OrderDate = o.OrderDate,
                     TotalPrice = o.TotalPrice,
-                    OrderStatus = o.orderStatus.ToString(),
+                    OrderStatus = o.OrderStatus.ToString(),
                     OrderItems = o.OrderItems.Select(oi => new OrderItemReadDto
                     {
                         ProductId = oi.ProductId,
                         ProductName = oi.Product.Name,
                         Quantity = oi.Quantity,
-                        PriceAtPurchase = oi.PriceAtPurchase,
+                        PriceAtPurchase = oi.PriceAtPurchase
                     }).ToList()
                 }).ToList();
+
             return Ok(orders);
         }
 
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = "USER")]
         [HttpGet]
-        [Route("api/orders/{id}")]
-        public async Task<IHttpActionResult> GetOrderById(int id)
+        [Route("api/orders/my")]
+        public IHttpActionResult GetMyOrders()
         {
-            var order = await db.Orders
+            var identity = (ClaimsIdentity)User.Identity;
+            var userIdClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null)
+                return Unauthorized();
+
+            int userId = Convert.ToInt32(userIdClaim.Value);
+
+            var orders = db.Orders
                 .AsNoTracking()
-                .Include(o => o.OrderItems.Select(oi => oi.Product))
-                .Where(o => o.Id == id)
+                .Include("OrderItems.Product")
+                .Where(o => o.UserId == userId)
                 .Select(o => new OrderReadDto
                 {
                     Id = o.Id,
-                    Name = o.Name,
-                    PhoneNumber = o.PhoneNumber,
-                    Email = o.Email,
-                    Address = o.Address,
+                    Name = o.User.Name,
+                    PhoneNumber = o.User.PhoneNumber,
+                    Email = o.User.Email,
+                    Address = o.User.Address,
                     Note = o.Note,
                     OrderDate = o.OrderDate,
                     TotalPrice = o.TotalPrice,
-                    OrderStatus = o.orderStatus.ToString(),
+                    OrderStatus = o.OrderStatus.ToString(),
                     OrderItems = o.OrderItems.Select(oi => new OrderItemReadDto
                     {
                         ProductId = oi.ProductId,
                         ProductName = oi.Product.Name,
                         Quantity = oi.Quantity,
-                        PriceAtPurchase = oi.PriceAtPurchase,
+                        PriceAtPurchase = oi.PriceAtPurchase
                     }).ToList()
-                })
-                .FirstOrDefaultAsync();
+                }).ToList();
 
-            if (order == null)
-                return NotFound();
-
-            return Ok(order);
+            return Ok(orders);
         }
 
-        
+
+        [Authorize(Roles = "USER, ADMIN")]
         [HttpPost]
         [Route("api/orders/create")]
         public async Task<IHttpActionResult> CreateOrder(OrderCreateDto dto)
@@ -96,20 +104,22 @@ namespace SHOPAPI.Controllers
             if (dto == null || dto.Items == null || !dto.Items.Any())
                 return BadRequest("Dữ liệu đơn hàng không hợp lệ.");
 
-            if (string.IsNullOrEmpty(dto.Email))
-                return BadRequest("Email là bắt buộc.");
+            var identity = (ClaimsIdentity)User.Identity;
+            var userIdClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null)
+                return Unauthorized();
+
+            int userId = Convert.ToInt32(userIdClaim.Value);
 
             using (var transaction = db.Database.BeginTransaction())
             {
                 try
                 {
-                    // Lấy tất cả product IDs một lần thay vì query từng cái
                     var productIds = dto.Items.Select(i => i.ProductId).ToList();
                     var products = await db.Products
                         .Where(p => productIds.Contains(p.Id))
                         .ToDictionaryAsync(p => p.Id, p => p);
 
-                    // Validation nhanh
                     foreach (var itemDto in dto.Items)
                     {
                         if (!products.ContainsKey(itemDto.ProductId))
@@ -120,63 +130,50 @@ namespace SHOPAPI.Controllers
                             return BadRequest($"Sản phẩm {product.Name} không đủ hàng.");
                     }
 
-                    // Tạo order
-                    var order = new Order
-                    {
-                        Name = dto.Name,
-                        PhoneNumber = dto.PhoneNumber,
-                        Email = dto.Email,
-                        Address = dto.Address,
-                        Note = dto.Note,
-                        OrderDate = DateTime.Now,
-                        TotalPrice = 0,
-                        orderStatus = OrderStatus.DangXuLy,
-                        OrderItems = new List<OrderItem>()
-                    };
-
                     var orderItems = new List<OrderItem>();
                     long totalPrice = 0;
 
                     foreach (var itemDto in dto.Items)
                     {
                         var product = products[itemDto.ProductId];
-
-                        // Trừ tồn kho
                         product.Quantity -= itemDto.Quantity;
                         if (product.Quantity == 0)
                             product.IsOutOfStock = true;
 
-                        // Tạo OrderItem
-                        var orderItem = new OrderItem
+                        orderItems.Add(new OrderItem
                         {
                             ProductId = product.Id,
                             Quantity = itemDto.Quantity,
                             PriceAtPurchase = product.Price,
                             Product = product
-                        };
+                        });
 
-                        orderItems.Add(orderItem);
                         totalPrice += product.Price * itemDto.Quantity;
                     }
 
-                    order.OrderItems = orderItems;
-                    order.TotalPrice = totalPrice;
+                    var order = new Order
+                    {
+                        UserId = userId,
+                        Note = dto.Note,
+                        OrderDate = DateTime.Now,
+                        TotalPrice = totalPrice,
+                        OrderStatus = OrderStatus.DangXuLy,
+                        OrderItems = orderItems
+                    };
 
                     db.Orders.Add(order);
-
                     db.SaveChanges();
-
                     transaction.Commit();
 
-                    _= Task.Run(async () =>
+                    _ = Task.Run(async () =>
                     {
                         try
                         {
                             await emailService.SendOrderConfirmationEmailAsync(order);
                         }
-                        catch (Exception emailEx)
+                        catch (Exception exEmail)
                         {
-                            System.Diagnostics.Debug.WriteLine($"Email sending failed: {emailEx.Message}");
+                            System.Diagnostics.Debug.WriteLine($"Email sending failed: {exEmail.Message}");
                         }
                     });
 
@@ -194,6 +191,104 @@ namespace SHOPAPI.Controllers
             }
         }
 
+        [Authorize(Roles = "USER")]
+        [HttpPost]
+        [Route("api/orders/create-from-cart")]
+        public async Task<IHttpActionResult> CreateOrderFromCart(OrderFromCartDto dto)
+        {
+            if (dto == null || dto.CartItemIds == null || !dto.CartItemIds.Any())
+                return BadRequest("Dữ liệu đơn hàng không hợp lệ.");
+
+            var identity = (ClaimsIdentity)User.Identity;
+            var userIdClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null)
+                return Unauthorized();
+
+            int userId = Convert.ToInt32(userIdClaim.Value);
+
+            using (var transaction = db.Database.BeginTransaction())
+            {
+                try
+                {
+                    var cartItems = db.CartItems
+                        .Include("Product")
+                        .Include("Cart")
+                        .Where(ci => dto.CartItemIds.Contains(ci.Id) && ci.Cart.UserId == userId)
+                        .ToList();
+
+                    if (!cartItems.Any())
+                        return BadRequest("Không tìm thấy cart item hợp lệ.");
+
+                    var orders = new List<Order>();
+
+                    // Không cần GroupBy — gom tất cả cartItems thành 1 đơn duy nhất
+                    var orderItems = new List<OrderItem>();
+                    long totalPrice = 0;
+
+                    foreach (var item in cartItems)
+                    {
+                        var product = item.Product;
+
+                        if (product.Quantity < item.Quantity)
+                            return BadRequest($"Sản phẩm {product.Name} không đủ hàng.");
+
+                        product.Quantity -= item.Quantity;
+                        if (product.Quantity == 0)
+                            product.IsOutOfStock = true;
+
+                        orderItems.Add(new OrderItem
+                        {
+                            ProductId = product.Id,
+                            Quantity = item.Quantity,
+                            PriceAtPurchase = product.Price
+                        });
+
+                        totalPrice += product.Price * item.Quantity;
+                    }
+
+                    var order = new Order
+                    {
+                        UserId = userId,
+                        OrderDate = DateTime.Now,
+                        TotalPrice = totalPrice,
+                        OrderStatus = OrderStatus.DangXuLy,
+                        OrderItems = orderItems
+                    };
+
+                    db.Orders.Add(order);
+                    db.CartItems.RemoveRange(cartItems);
+                    await db.SaveChangesAsync();
+                    transaction.Commit();
+
+
+                    // Gửi email xác nhận nhiều đơn
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await invoiceService.SendMultiInvoiceEmailAsync(orders);
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Lỗi gửi email: {ex.Message}");
+                        }
+                    });
+
+                    return Ok(new
+                    {
+                        message = $"Tạo đơn hàng thành công.",
+                        orderIds = order.Id
+                    });
+                }
+                catch (Exception ex)
+                {
+                    transaction.Rollback();
+                    return InternalServerError(ex);
+                }
+            }
+        }
+
+
         [Authorize(Roles = "ADMIN")]
         [HttpPut]
         [Route("api/orders/{id}")]
@@ -206,7 +301,7 @@ namespace SHOPAPI.Controllers
             if (!Enum.TryParse(dto.Status, out OrderStatus newStatus))
                 return BadRequest("Trạng thái không hợp lệ.");
 
-            if (newStatus == OrderStatus.DaHuy && order.orderStatus != OrderStatus.DaHuy)
+            if (newStatus == OrderStatus.DaHuy && order.OrderStatus != OrderStatus.DaHuy)
             {
                 foreach (var orderItem in order.OrderItems)
                 {
@@ -216,68 +311,39 @@ namespace SHOPAPI.Controllers
                 }
             }
 
-            order.orderStatus = newStatus;
+            order.OrderStatus = newStatus;
             db.SaveChanges();
 
             return Ok("Cập nhật trạng thái đơn hàng thành công.");
         }
 
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = "USER")]
         [HttpPut]
-        [Route("api/orders/{id}/info")]
-        public async Task<IHttpActionResult> UpdateOrderInfo(int id, UpdateOrderInfoDto dto)
+        [Route("api/orders/{id}/cancel")]
+        public IHttpActionResult CancelOrder(int id)
         {
-            // Kiểm tra tính hợp lệ của dữ liệu đầu vào
-            if (dto == null)
-                return BadRequest("Dữ liệu không hợp lệ.");
+            var identity = (ClaimsIdentity)User.Identity;
+            var userIdClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null)
+                return Unauthorized();
 
-            // Kiểm tra email hợp lệ
-            if (string.IsNullOrWhiteSpace(dto.Email) || !IsValidEmail(dto.Email))
-                return BadRequest("Email không hợp lệ.");
+            int userId = Convert.ToInt32(userIdClaim.Value);
 
-            try
+            var order = db.Orders.FirstOrDefault(o => o.Id == id && o.UserId == userId);
+            if (order == null)
+                return NotFound();
+
+            if (order.OrderStatus != OrderStatus.DangXuLy)
+                return BadRequest("Chỉ có thể hủy đơn hàng khi đang xử lý.");
+
+            order.OrderStatus = OrderStatus.DaHuy;
+            db.SaveChanges();
+
+            return Ok(new
             {
-                // Tìm đơn hàng theo ID
-                var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id);
-                if (order == null)
-                    return NotFound();
-
-                // Kiểm tra trạng thái đơn hàng
-                if (order.orderStatus != OrderStatus.DangXuLy)
-                    return BadRequest("Chỉ có thể cập nhật thông tin khi đơn hàng đang xử lý.");
-
-                // Cập nhật thông tin (chỉ cập nhật khi có giá trị hợp lệ)
-                if (!string.IsNullOrWhiteSpace(dto.Name))
-                    order.Name = dto.Name.Trim();
-
-                if (!string.IsNullOrWhiteSpace(dto.PhoneNumber))
-                    order.PhoneNumber = dto.PhoneNumber.Trim();
-
-                if (!string.IsNullOrWhiteSpace(dto.Email))
-                    order.Email = dto.Email.Trim();
-
-                if (!string.IsNullOrWhiteSpace(dto.Address))
-                    order.Address = dto.Address.Trim();
-
-                // Note có thể là null hoặc empty
-                order.Note = dto.Note?.Trim();
-
-                // Cập nhật thời gian sửa đổi (nếu có field này)
-                // order.UpdatedAt = DateTime.UtcNow;
-
-                await db.SaveChangesAsync();
-
-                return Ok(new
-                {
-                    message = "Cập nhật thông tin đơn hàng thành công.",
-                    orderId = id
-                });
-            }
-            catch (Exception)
-            {
-                // Log exception ở đây
-                return InternalServerError(new Exception("Có lỗi xảy ra khi cập nhật đơn hàng."));
-            }
+                message = "Đơn hàng đã được hủy thành công.",
+                orderId = order.Id
+            });
         }
 
         [Authorize(Roles = "ADMIN")]
@@ -298,7 +364,7 @@ namespace SHOPAPI.Controllers
 
                 return Ok(new
                 {
-                    message = $"Hóa đơn PDF đã được gửi đến {order.Email}."
+                    message = $"Hóa đơn PDF đã được gửi đến {order.User.Email}."
                 });
             }
             catch (Exception ex)
@@ -363,9 +429,9 @@ namespace SHOPAPI.Controllers
                 // Tìm các đơn hàng theo số điện thoại và ngày
                 var orders = await db.Orders
                     .Include(o => o.OrderItems.Select(oi => oi.Product))
-                    .Where(o => o.PhoneNumber == dto.PhoneNumber.Trim() &&
+                    .Where(o => o.User.PhoneNumber == dto.PhoneNumber.Trim() &&
                                DbFunctions.TruncateTime(o.OrderDate) == targetDate.Date &&
-                               o.orderStatus == OrderStatus.DaGiao) // Thêm điều kiện trạng thái đơn hàng
+                               o.OrderStatus == OrderStatus.DaGiao) // Thêm điều kiện trạng thái đơn hàng
                     .OrderBy(o => o.OrderDate)
                     .ToListAsync();
 
@@ -387,7 +453,7 @@ namespace SHOPAPI.Controllers
 
                         return Ok(new
                         {
-                            Message = $"Đã gửi báo cáo {orders.Count} đơn hàng đến email {orders.First().Email}",
+                            Message = $"Đã gửi báo cáo {orders.Count} đơn hàng đến email {orders.First().User.Email}",
                             PhoneNumber = dto.PhoneNumber,
                             OrderDate = targetDate.ToString("dd/MM/yyyy"),
                             OrderCount = orders.Count,
@@ -421,7 +487,6 @@ namespace SHOPAPI.Controllers
                 return InternalServerError(new Exception("Có lỗi xảy ra khi tạo báo cáo đơn hàng."));
             }
         }
-
 
         // Helper method để kiểm tra email hợp lệ
         private bool IsValidEmail(string email)

@@ -7,6 +7,7 @@ namespace SHOPAPI.Models.Enum
 {
     public enum Role
     {
-        ADMIN
+        ADMIN, 
+        USER
     }
 }

@@ -192,13 +192,19 @@
   <ItemGroup>
     <Compile Include="App_Start\JwtManager.cs" />
     <Compile Include="App_Start\WebApiConfig.cs" />
-    <Compile Include="Controllers\AdminController.cs" />
-    <Compile Include="Controllers\CategoryController.cs" />
+    <Compile Include="Controllers\CartController.cs" />
     <Compile Include="Controllers\OrderController.cs" />
+    <Compile Include="Controllers\UserController.cs" />
+    <Compile Include="Controllers\CategoryController.cs" />
     <Compile Include="Controllers\ProductController.cs" />
     <Compile Include="Data\AppDbContext.cs" />
-    <Compile Include="DTOs\Admin\AdminLoginDto.cs" />
-    <Compile Include="DTOs\Admin\AdminResponseDto.cs" />
+    <Compile Include="DTOs\Cart\AddCartItemDto.cs" />
+    <Compile Include="DTOs\Cart\CartItemReadDto.cs" />
+    <Compile Include="DTOs\Cart\OrderFromCartDto.cs" />
+    <Compile Include="DTOs\User\LoginDto.cs" />
+    <Compile Include="DTOs\User\Register.cs" />
+    <Compile Include="DTOs\User\UserInfoDto.cs" />
+    <Compile Include="DTOs\User\UserResponseDto.cs" />
     <Compile Include="DTOs\Categories\CategoryReadDto.cs" />
     <Compile Include="DTOs\Order\OrderCreateDto.cs" />
     <Compile Include="DTOs\Order\OrderItemDto.cs" />
@@ -213,12 +219,10 @@
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
-    <Compile Include="Migrations\202506061526290_ShopDB.cs" />
-    <Compile Include="Migrations\202506061526290_ShopDB.Designer.cs">
-      <DependentUpon>202506061526290_ShopDB.cs</DependentUpon>
-    </Compile>
     <Compile Include="Migrations\Configuration.cs" />
-    <Compile Include="Models\Admin.cs" />
+    <Compile Include="Models\Cart.cs" />
+    <Compile Include="Models\CartItem.cs" />
+    <Compile Include="Models\Users.cs" />
     <Compile Include="Models\Category.cs" />
     <Compile Include="Models\Enum\OrderStatus.cs" />
     <Compile Include="Models\Enum\Role.cs" />
@@ -242,11 +246,6 @@
   <ItemGroup>
     <Folder Include="App_Data\" />
     <Folder Include="Uploads\" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Migrations\202506061526290_ShopDB.resx">
-      <DependentUpon>202506061526290_ShopDB.cs</DependentUpon>
-    </EmbeddedResource>
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>

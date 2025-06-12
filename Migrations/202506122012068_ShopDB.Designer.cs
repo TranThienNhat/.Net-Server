@@ -13,7 +13,7 @@ namespace API.Migrations
         
         string IMigrationMetadata.Id
         {
-            get { return "202506061526290_ShopDB"; }
+            get { return "202506122012068_ShopDB"; }
         }
         
         string IMigrationMetadata.Source
