@@ -200,7 +200,8 @@
     <Compile Include="Data\AppDbContext.cs" />
     <Compile Include="DTOs\Cart\AddCartItemDto.cs" />
     <Compile Include="DTOs\Cart\CartItemReadDto.cs" />
-    <Compile Include="DTOs\Cart\OrderFromCartDto.cs" />
+    <Compile Include="DTOs\Cart\CreateOrderDto.cs" />
+    <Compile Include="DTOs\Cart\CreateOrderFromCartDto.cs" />
     <Compile Include="DTOs\User\LoginDto.cs" />
     <Compile Include="DTOs\User\Register.cs" />
     <Compile Include="DTOs\User\UserInfoDto.cs" />

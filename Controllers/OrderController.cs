@@ -119,7 +119,7 @@ namespace SHOPAPI.Controllers
         [Authorize(Roles = "USER, ADMIN")]
         [HttpPost]
         [Route("api/orders/create")]
-        public async Task<IHttpActionResult> CreateOrder(OrderItemDto dto)
+        public async Task<IHttpActionResult> CreateOrder(CreateOrderDto dto)
         {
             if (dto == null || dto.ProductId <= 0 || dto.Quantity <= 0)
                 return BadRequest("Dữ liệu đơn hàng không hợp lệ.");
@@ -148,22 +148,6 @@ namespace SHOPAPI.Controllers
 
                     if (product.Quantity < dto.Quantity)
                         return BadRequest($"Sản phẩm {product.Name} không đủ hàng (còn {product.Quantity}, cần {dto.Quantity}).");
-
-                    CartItem cartItemToRemove = null;
-
-                    // Kiểm tra cart item nếu có
-                    if (dto.CartItemId.HasValue)
-                    {
-                        cartItemToRemove = await db.CartItems
-                            .Include(ci => ci.Cart)
-                            .FirstOrDefaultAsync(ci => ci.Id == dto.CartItemId.Value && ci.Cart.UserId == userId);
-
-                        if (cartItemToRemove == null)
-                            return BadRequest($"Cart item với ID {dto.CartItemId.Value} không tồn tại hoặc không thuộc về bạn.");
-
-                        if (cartItemToRemove.ProductId != dto.ProductId)
-                            return BadRequest("ProductId không khớp với cart item.");
-                    }
 
                     // Cập nhật số lượng sản phẩm
                     product.Quantity -= dto.Quantity;
@@ -196,13 +180,6 @@ namespace SHOPAPI.Controllers
                     };
 
                     db.OrderItems.Add(orderItem);
-
-                    // Xóa cart item nếu có
-                    if (cartItemToRemove != null)
-                    {
-                        db.CartItems.Remove(cartItemToRemove);
-                    }
-
                     await db.SaveChangesAsync();
                     transaction.Commit();
 
@@ -211,7 +188,6 @@ namespace SHOPAPI.Controllers
                     {
                         try
                         {
-                            // Load lại order với đầy đủ thông tin để gửi email
                             var orderForEmail = await db.Orders
                                 .Include(o => o.User)
                                 .Include(o => o.OrderItems.Select(oi => oi.Product))
@@ -231,6 +207,123 @@ namespace SHOPAPI.Controllers
                     return Ok(new
                     {
                         Message = "Tạo đơn hàng thành công.",
+                        OrderId = order.Id,
+                        TotalPrice = order.TotalPrice,
+                        ItemCount = 1
+                    });
+                }
+                catch (Exception ex)
+                {
+                    transaction.Rollback();
+                    return InternalServerError(ex);
+                }
+            }
+        }
+
+        // API tạo đơn hàng từ giỏ hàng
+        [Authorize(Roles = "USER, ADMIN")]
+        [HttpPost]
+        [Route("api/orders/create-cart")]
+        public async Task<IHttpActionResult> CreateOrderFromCart(CreateOrderFromCartDto dto)
+        {
+            if (dto == null || dto.CartItemId <= 0)
+                return BadRequest("Dữ liệu đơn hàng không hợp lệ.");
+
+            var identity = (ClaimsIdentity)User.Identity;
+            var userIdClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null)
+                return Unauthorized();
+
+            if (!int.TryParse(userIdClaim.Value, out int userId))
+                return Unauthorized();
+
+            using (var transaction = db.Database.BeginTransaction())
+            {
+                try
+                {
+                    // Lấy user để đảm bảo tồn tại
+                    var user = await db.Users.FindAsync(userId);
+                    if (user == null)
+                        return BadRequest("Người dùng không tồn tại.");
+
+                    // Lấy cart item
+                    var cartItem = await db.CartItems
+                        .Include(ci => ci.Cart)
+                        .Include(ci => ci.Product)
+                        .FirstOrDefaultAsync(ci => ci.Id == dto.CartItemId && ci.Cart.UserId == userId);
+
+                    if (cartItem == null)
+                        return BadRequest($"Cart item với ID {dto.CartItemId} không tồn tại hoặc không thuộc về bạn.");
+
+                    var product = cartItem.Product;
+                    if (product == null)
+                        return BadRequest("Sản phẩm không tồn tại.");
+
+                    if (product.Quantity < cartItem.Quantity)
+                        return BadRequest($"Sản phẩm {product.Name} không đủ hàng (còn {product.Quantity}, cần {cartItem.Quantity}).");
+
+                    // Cập nhật số lượng sản phẩm
+                    product.Quantity -= cartItem.Quantity;
+                    if (product.Quantity <= 0)
+                    {
+                        product.Quantity = 0;
+                        product.IsOutOfStock = true;
+                    }
+
+                    // Tạo đơn hàng
+                    var order = new Order
+                    {
+                        UserId = userId,
+                        Note = dto.Note ?? string.Empty,
+                        OrderDate = DateTime.Now,
+                        TotalPrice = product.Price * cartItem.Quantity,
+                        OrderStatus = OrderStatus.DangXuLy
+                    };
+
+                    db.Orders.Add(order);
+                    await db.SaveChangesAsync();
+
+                    // Tạo order item
+                    var orderItem = new OrderItem
+                    {
+                        OrderId = order.Id,
+                        ProductId = product.Id,
+                        Quantity = cartItem.Quantity,
+                        PriceAtPurchase = product.Price
+                    };
+
+                    db.OrderItems.Add(orderItem);
+
+                    // Xóa cart item
+                    db.CartItems.Remove(cartItem);
+
+                    await db.SaveChangesAsync();
+                    transaction.Commit();
+
+                    // Gửi email xác nhận (fire-and-forget)
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var orderForEmail = await db.Orders
+                                .Include(o => o.User)
+                                .Include(o => o.OrderItems.Select(oi => oi.Product))
+                                .FirstOrDefaultAsync(o => o.Id == order.Id);
+
+                            if (orderForEmail != null)
+                            {
+                                await emailService.SendOrderConfirmationEmailAsync(orderForEmail);
+                            }
+                        }
+                        catch (Exception exEmail)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Email sending failed: {exEmail.Message}");
+                        }
+                    });
+
+                    return Ok(new
+                    {
+                        Message = "Tạo đơn hàng từ giỏ hàng thành công.",
                         OrderId = order.Id,
                         TotalPrice = order.TotalPrice,
                         ItemCount = 1

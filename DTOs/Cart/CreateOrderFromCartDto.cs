@@ -5,8 +5,9 @@ using System.Web;
 
 namespace API.DTOs.Cart
 {
-    public class OrderFromCartDto
+    public class CreateOrderFromCartDto
     {
-        public List<int> CartItemIds { get; set; }
+        public int CartItemId { get; set; }
+        public string Note { get; set; }
     }
 }
