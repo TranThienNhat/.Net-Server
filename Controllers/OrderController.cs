@@ -284,19 +284,29 @@ namespace SHOPAPI.Controllers
 
             int userId = Convert.ToInt32(userIdClaim.Value);
 
-            var order = db.Orders.FirstOrDefault(o => o.Id == id && o.UserId == userId);
+            var order = db.Orders
+                .Include(o => o.OrderItems.Select(oi => oi.Product))
+                .FirstOrDefault(o => o.Id == id && o.UserId == userId);
+
             if (order == null)
                 return NotFound();
 
             if (order.OrderStatus != OrderStatus.DangXuLy)
                 return BadRequest("Chỉ có thể hủy đơn hàng khi đang xử lý.");
 
+            // Cập nhật lại số lượng tồn kho cho từng sản phẩm trong đơn hàng
+            foreach (var item in order.OrderItems)
+            {
+                item.Product.Quantity += item.Quantity;
+                item.Product.IsOutOfStock = false;
+            }
+
             order.OrderStatus = OrderStatus.DaHuy;
             db.SaveChanges();
 
             return Ok(new
             {
-                message = "Đơn hàng đã được hủy thành công.",
+                message = "Đơn hàng đã được hủy thành công và số lượng sản phẩm đã được cập nhật.",
                 orderId = order.Id
             });
         }

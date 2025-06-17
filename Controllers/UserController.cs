@@ -110,7 +110,6 @@ namespace SHOPAPI.Controllers
 
             return Ok(new
             {
-                user.Id,
                 user.Username,
                 user.Name,
                 user.Email,
